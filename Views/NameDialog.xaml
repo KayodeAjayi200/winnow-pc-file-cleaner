@@ -1,0 +1,50 @@
+<Window x:Class="FileTinder.Views.NameDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Bucket"
+        Width="340" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="{StaticResource BgSurfaceBrush}">
+
+    <StackPanel Margin="22,20,22,20">
+
+        <TextBlock x:Name="PromptText"
+                   Text="Name your bucket:"
+                   FontSize="13" FontWeight="SemiBold"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   Margin="0,0,0,10"/>
+
+        <Border Background="{StaticResource BgSurfaceBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="1" CornerRadius="8"
+                Margin="0,0,0,16">
+            <TextBox x:Name="NameBox"
+                     FontSize="14"
+                     Background="Transparent"
+                     Foreground="{StaticResource TextPrimaryBrush}"
+                     BorderThickness="0"
+                     Padding="10,8"
+                     CaretBrush="{StaticResource TextPrimaryBrush}"
+                     SelectionBrush="{StaticResource AccentBucketBrush}"/>
+        </Border>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="CancelBtn"
+                    Click="CancelBtn_Click"
+                    Style="{StaticResource BaseButtonStyle}"
+                    Padding="16,8" Margin="0,0,10,0">
+                <TextBlock Text="Cancel"/>
+            </Button>
+            <Button x:Name="OkBtn"
+                    Click="OkBtn_Click"
+                    Style="{StaticResource BaseButtonStyle}"
+                    Padding="16,8"
+                    Background="{StaticResource AccentBucketBrush}">
+                <TextBlock Text="✓  OK"/>
+            </Button>
+        </StackPanel>
+
+    </StackPanel>
+</Window>

@@ -1,0 +1,81 @@
+<UserControl x:Class="FileTinder.Views.FilePreviewControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid x:Name="RootGrid"
+          Background="#0F0F0F"
+          ClipToBounds="True">
+
+        <!-- ── Image preview ───────────────────────────────────────── -->
+        <Image x:Name="ImagePreview"
+               Stretch="UniformToFill"
+               RenderOptions.BitmapScalingMode="HighQuality"
+               Visibility="Collapsed"/>
+
+        <!-- ── Video preview ───────────────────────────────────────── -->
+        <MediaElement x:Name="VideoPreview"
+                      LoadedBehavior="Manual"
+                      IsMuted="True"
+                      Stretch="UniformToFill"
+                      Visibility="Collapsed"
+                      MediaOpened="VideoPreview_MediaOpened"
+                      MediaFailed="VideoPreview_MediaFailed"/>
+
+        <!-- Video play/pause overlay -->
+        <Border x:Name="VideoPlayOverlay"
+                Width="48" Height="48"
+                CornerRadius="24"
+                Background="#88000000"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Margin="0,0,8,8"
+                Cursor="Hand"
+                Visibility="Collapsed"
+                MouseLeftButtonUp="VideoPlayOverlay_Click">
+            <TextBlock x:Name="PlayPauseIcon"
+                       Text="⏸"
+                       FontSize="18"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Foreground="White"/>
+        </Border>
+
+        <!-- ── Text / code preview ─────────────────────────────────── -->
+        <Border x:Name="TextPreviewBorder"
+                Visibility="Collapsed"
+                Padding="14,12"
+                Background="#0DFFFFFF">
+            <TextBlock x:Name="TextPreviewText"
+                       FontFamily="Cascadia Code, Consolas, Courier New"
+                       FontSize="10.5"
+                       Foreground="#B0C8E8"
+                       TextWrapping="Wrap"
+                       LineHeight="17"/>
+        </Border>
+
+        <!-- ── Default / fallback icon ─────────────────────────────── -->
+        <StackPanel x:Name="DefaultPanel"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Visibility="Collapsed">
+            <TextBlock x:Name="DefaultIcon"
+                       FontSize="56"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,4"/>
+            <TextBlock x:Name="DefaultLabel"
+                       FontSize="11"
+                       Foreground="#557799"
+                       HorizontalAlignment="Center"/>
+        </StackPanel>
+
+        <!-- Loading spinner text -->
+        <TextBlock x:Name="LoadingText"
+                   Text="Loading preview…"
+                   FontSize="12"
+                   Foreground="#446688"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Visibility="Collapsed"/>
+
+    </Grid>
+</UserControl>

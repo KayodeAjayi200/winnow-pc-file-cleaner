@@ -1,0 +1,270 @@
+<UserControl x:Class="FileTinder.Views.CardStackControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:FileTinder.Converters"
+             xmlns:views="clr-namespace:FileTinder.Views"
+             Focusable="True"
+             KeyDown="UserControl_KeyDown">
+
+    <UserControl.Resources>
+        <conv:HexColorToBrushConverter x:Key="HexToBrush"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisInv" Invert="True"/>
+
+        <!-- Duplicate badge pulse animation -->
+        <Storyboard x:Key="DuplicatePulseStoryboard" RepeatBehavior="Forever" AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="DuplicateBadge"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0.65" To="1.0"
+                             Duration="0:0:0.9"/>
+        </Storyboard>
+    </UserControl.Resources>
+
+    <Grid>
+        <!-- ── Empty / Complete State ────────────────────────────── -->
+        <Border x:Name="EmptyState"
+                Background="Transparent"
+                Visibility="{Binding HasCurrentFile, Converter={StaticResource BoolToVisInv}}"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+            <StackPanel HorizontalAlignment="Center">
+                <TextBlock Text="🎉" FontSize="72" HorizontalAlignment="Center" Margin="0,0,0,16"
+                           FontFamily="Segoe UI Emoji"
+                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                <TextBlock Text="All done!" FontSize="28" FontWeight="Bold"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                <TextBlock x:Name="EmptySubtext"
+                           Text="Browse a folder to get started."
+                           FontSize="15" Foreground="{StaticResource TextSecondaryBrush}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Card Stack ─────────────────────────────────────────── -->
+        <Viewbox Stretch="Uniform" StretchDirection="DownOnly"
+                 Visibility="{Binding HasCurrentFile, Converter={StaticResource BoolToVis}}">
+        <Grid x:Name="CardStackGrid"
+              HorizontalAlignment="Center" VerticalAlignment="Center">
+
+            <!-- Back card (card +2) -->
+            <Border x:Name="BackCard2"
+                    Width="360" Height="480"
+                    CornerRadius="20"
+                    Background="{StaticResource BgCardBrush}"
+                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    RenderTransformOrigin="0.5,0.5"
+                    Margin="0,32,0,0">
+                <Border.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="BackCard2Scale" ScaleX="0.90" ScaleY="0.90"/>
+                        <TranslateTransform Y="0"/>
+                    </TransformGroup>
+                </Border.RenderTransform>
+                <Border.Effect>
+                    <DropShadowEffect Color="#FF000000" BlurRadius="20" ShadowDepth="8" Opacity="0.3"/>
+                </Border.Effect>
+            </Border>
+
+            <!-- Middle card (card +1) -->
+            <Border x:Name="BackCard1"
+                    Width="360" Height="480"
+                    CornerRadius="20"
+                    Background="{StaticResource BgCardBrush}"
+                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    RenderTransformOrigin="0.5,0.5"
+                    Margin="0,16,0,0">
+                <Border.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="BackCard1Scale" ScaleX="0.95" ScaleY="0.95"/>
+                        <TranslateTransform Y="0"/>
+                    </TransformGroup>
+                </Border.RenderTransform>
+                <Border.Effect>
+                    <DropShadowEffect Color="#FF000000" BlurRadius="20" ShadowDepth="8" Opacity="0.3"/>
+                </Border.Effect>
+            </Border>
+
+            <!-- ── FRONT CARD (interactive) ──────────────────────── -->
+            <Border x:Name="FrontCard"
+                    Width="360" Height="480"
+                    CornerRadius="20"
+                    Background="{StaticResource BgCardBrush}"
+                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    Cursor="Hand"
+                    RenderTransformOrigin="0.5,1.0"
+                    MouseDown="FrontCard_MouseDown"
+                    MouseMove="FrontCard_MouseMove"
+                    MouseUp="FrontCard_MouseUp"
+                    MouseLeave="FrontCard_MouseLeave">
+                <Border.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="CardScale" ScaleX="1" ScaleY="1"/>
+                        <RotateTransform x:Name="CardRotate" Angle="0"/>
+                        <TranslateTransform x:Name="CardTranslate" X="0" Y="0"/>
+                    </TransformGroup>
+                </Border.RenderTransform>
+                <Border.Effect>
+                    <DropShadowEffect Color="#FF000000" BlurRadius="30" ShadowDepth="12" Opacity="0.5"/>
+                </Border.Effect>
+
+                <Grid ClipToBounds="True">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="160"/>   <!-- preview thumbnail -->
+                        <RowDefinition Height="*"/>     <!-- file info -->
+                        <RowDefinition Height="Auto"/>  <!-- hint bar -->
+                    </Grid.RowDefinitions>
+
+                    <!-- ── PREVIEW AREA ───────────────────────────── -->
+                    <views:FilePreviewControl Grid.Row="0"
+                                              x:Name="PreviewControl"
+                                              FileItem="{Binding CurrentFile}"/>
+
+                    <!-- Category badge overlay (top-right of preview) -->
+                    <Border Grid.Row="0"
+                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Margin="0,8,8,0"
+                            Background="{Binding CurrentFile.CategoryColor, Converter={StaticResource HexToBrush}}"
+                            CornerRadius="12" Padding="9,4">
+                        <TextBlock Text="{Binding CurrentFile.CategoryLabel}"
+                                   FontSize="10" FontWeight="SemiBold"
+                                   Foreground="White"/>
+                    </Border>
+
+                    <!-- ── FILE INFO ──────────────────────────────── -->
+                    <StackPanel Grid.Row="1" Margin="20,12,20,8" VerticalAlignment="Top">
+
+                        <!-- Duplicate badge (visible only when duplicate) -->
+                        <Border x:Name="DuplicateBadge"
+                                Background="#33F59E0B"
+                                BorderBrush="{StaticResource AccentDuplicateBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="10,4"
+                                Margin="0,0,0,8"
+                                Visibility="Collapsed">
+                            <TextBlock x:Name="DuplicateBadgeText"
+                                       Text="{Binding CurrentFile.DuplicateBadgeText}"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentDuplicateBrush}"/>
+                        </Border>
+
+                        <!-- File name -->
+                        <TextBlock Text="{Binding CurrentFile.Name}"
+                                   FontSize="17" FontWeight="Bold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   TextWrapping="Wrap"
+                                   MaxHeight="52"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="0,0,0,6"/>
+
+                        <!-- Size (hero number) -->
+                        <TextBlock Text="{Binding CurrentFile.SizeFormatted}"
+                                   FontSize="30" FontWeight="Bold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Margin="0,0,0,6"/>
+
+                        <!-- Divider -->
+                        <Border Height="1" Background="{StaticResource BorderSubtleBrush}" Margin="0,0,0,8"/>
+
+                        <!-- Last modified -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="🕒 " FontSize="12"/>
+                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
+                                <Run Text="Modified "/>
+                                <Run Text="{Binding CurrentFile.LastModified, StringFormat=\{0:dd MMM yyyy\}}"/>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Directory path -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="📂 " FontSize="12"/>
+                            <TextBlock Text="{Binding CurrentFile.DirectoryPath}"
+                                       FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="270"/>
+                        </StackPanel>
+
+                        <!-- File action buttons row -->
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="OpenInAppBtn"
+                                    Style="{StaticResource BaseButtonStyle}"
+                                    HorizontalAlignment="Left"
+                                    Padding="12,6"
+                                    FontSize="12"
+                                    Background="#1AFFFFFF"
+                                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    AutomationProperties.Name="Open in default app"
+                                    Margin="0,0,8,0"
+                                    Click="OpenInAppBtn_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="↗ " FontSize="12"/>
+                                    <TextBlock Text="Open" FontSize="12"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="OpenLocationBtn"
+                                    Style="{StaticResource BaseButtonStyle}"
+                                    HorizontalAlignment="Left"
+                                    Padding="12,6"
+                                    FontSize="12"
+                                    Background="#1AFFFFFF"
+                                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    AutomationProperties.Name="Open file location in Explorer"
+                                    Click="OpenLocationBtn_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📍 " FontSize="12"/>
+                                    <TextBlock Text="Location" FontSize="12"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- ── HINT BAR ───────────────────────────────── -->
+                    <Border Grid.Row="2"
+                            Background="#1A7C3AED"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="20,10">
+                        <TextBlock Text="← delete  ·  B bucket  ·  O open  ·  L location  ·  keep →"
+                                   FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center"/>
+                    </Border>
+
+                    <!-- ── SWIPE OVERLAYS ─────────────────────────── -->
+
+                    <!-- DELETE overlay (drag left) -->
+                    <Border x:Name="DeleteOverlay"
+                            Grid.RowSpan="3"
+                            CornerRadius="20"
+                            Opacity="0"
+                            IsHitTestVisible="False"
+                            Background="#CCF85149">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock Text="🗑️" FontSize="56" HorizontalAlignment="Center"/>
+                            <TextBlock Text="DELETE" FontSize="32" FontWeight="Black"
+                                       Foreground="White" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- KEEP overlay (drag right) -->
+                    <Border x:Name="KeepOverlay"
+                            Grid.RowSpan="3"
+                            CornerRadius="20"
+                            Opacity="0"
+                            IsHitTestVisible="False"
+                            Background="#CC2EA44F">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock Text="✅" FontSize="56" HorizontalAlignment="Center"/>
+                            <TextBlock Text="KEEP" FontSize="32" FontWeight="Black"
+                                       Foreground="White" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                </Grid>
+            </Border>
+        </Grid>
+        </Viewbox>
+    </Grid>
+</UserControl>

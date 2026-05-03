@@ -1,0 +1,15 @@
+# Byte-compiled / optimized / DLL files
+bin/
+obj/
+publish/
+installer/
+
+# User-specific files
+*.user
+*.suo
+.vs/
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+.DS_Store

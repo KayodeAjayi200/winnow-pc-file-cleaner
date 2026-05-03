@@ -1,0 +1,442 @@
+<Window x:Class="FileTinder.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:FileTinder.ViewModels"
+        xmlns:views="clr-namespace:FileTinder.Views"
+        xmlns:conv="clr-namespace:FileTinder.Converters"
+        Title="Winnow"
+        Icon="app.ico"
+        Width="1020" Height="720"
+        MinWidth="800" MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BgDeepBrush}">
+
+    <Window.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisInv" Invert="True"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  <!-- title bar -->
+            <RowDefinition Height="Auto"/>  <!-- folder picker -->
+            <RowDefinition Height="Auto"/>  <!-- filter bar -->
+            <RowDefinition Height="Auto"/>  <!-- session banner -->
+            <RowDefinition Height="*"/>     <!-- main area -->
+        </Grid.RowDefinitions>
+
+        <!-- ════════════════════  TITLE BAR  ════════════════════════ -->
+        <Border Grid.Row="0"
+                Background="{StaticResource BgSurfaceBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="24,14">
+            <Grid>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <TextBlock Text="🔥" FontSize="22" Margin="0,0,10,0"
+                               FontFamily="Segoe UI Emoji"
+                               Foreground="#FF6B35"/>
+                    <TextBlock Text="Winnow" FontSize="20" FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,10,0"/>
+                    <Border Background="#1A7C3AED" CornerRadius="12" Padding="8,3" VerticalAlignment="Center">
+                        <TextBlock Text="File cleaner" FontSize="11"
+                                   Foreground="{StaticResource AccentBrandBrush}"/>
+                    </Border>
+                </StackPanel>
+
+                <!-- Sound controls -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button x:Name="MuteButton"
+                            Background="Transparent" BorderThickness="0"
+                            Cursor="Hand" Padding="6,2"
+                            ToolTip="Toggle mute"
+                            AutomationProperties.Name="Toggle mute"
+                            Click="MuteButton_Click">
+                        <TextBlock x:Name="MuteIcon" Text="🔊" FontSize="16"
+                                   FontFamily="Segoe UI Emoji"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Button>
+                    <Slider x:Name="VolumeSlider"
+                            Minimum="0" Maximum="1"
+                            Value="0.55"
+                            Width="80"
+                            VerticalAlignment="Center"
+                            ToolTip="Volume"
+                            AutomationProperties.Name="Volume"
+                            ValueChanged="VolumeSlider_ValueChanged"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ════════════════  FOLDER PICKER  ════════════════════════ -->
+        <Border Grid.Row="1"
+                Background="{StaticResource BgSurfaceBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="24,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBox Grid.Column="0"
+                         Style="{StaticResource PathTextBoxStyle}"
+                         Text="{Binding FolderPath, Mode=OneWay}"
+                         VerticalAlignment="Center"
+                         Margin="0,0,10,0"/>
+
+                <Button Grid.Column="1"
+                        Style="{StaticResource BrowseButtonStyle}"
+                        Command="{Binding BrowseFolderCommand}"
+                        Margin="0,0,10,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="📂" FontSize="14" Margin="0,0,6,0"/>
+                        <TextBlock Text="Browse"/>
+                    </StackPanel>
+                </Button>
+
+                <Button Grid.Column="2"
+                        Style="{StaticResource BaseButtonStyle}"
+                        Command="{Binding ReloadCommand}"
+                        ToolTip="Reload with current filters"
+                        AutomationProperties.Name="Reload with current filters"
+                        Visibility="{Binding HasFolder, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="↺ Reload"/>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- ════════════════  FILTER BAR  ═══════════════════════════ -->
+        <Border Grid.Row="2"
+                Background="{StaticResource BgDeepBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="24,10"
+                Visibility="{Binding HasFolder, Converter={StaticResource BoolToVis}}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <TextBlock Text="Type:" FontSize="13"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="TypeFilterCombo"
+                              Style="{StaticResource FilterComboStyle}"
+                              SelectionChanged="TypeFilterCombo_SelectionChanged"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <TextBlock Text="Modified:" FontSize="13"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="DateFilterCombo"
+                              Style="{StaticResource FilterComboStyle}"
+                              SelectionChanged="DateFilterCombo_SelectionChanged"/>
+                </StackPanel>
+
+                <!-- Subfolders toggle pill -->
+                <Border x:Name="SubfolderPill"
+                        CornerRadius="14"
+                        Padding="10,4"
+                        Margin="0,0,16,0"
+                        Cursor="Hand"
+                        MouseLeftButtonUp="SubfolderPill_Click">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="SubfolderCheckMark"
+                                   Text="📂"
+                                   FontSize="13"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,5,0"/>
+                        <TextBlock Text="Subfolders"
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SubfolderOnBadge"
+                                   Text=" ON"
+                                   FontSize="11" FontWeight="Bold"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource AccentBrandBrush}"
+                                   Visibility="{Binding IncludeSubfolders, Converter={StaticResource BoolToVis}}"/>
+                        <TextBlock x:Name="SubfolderOffBadge"
+                                   Text=" OFF"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Visibility="{Binding IncludeSubfolders, Converter={StaticResource BoolToVisInv}}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Scan status indicator -->
+                <TextBlock FontSize="12" Foreground="{StaticResource AccentBucketBrush}"
+                           VerticalAlignment="Center"
+                           Text="{Binding ScanStatusText}"
+                           Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"
+                           Margin="0,0,12,0"/>
+
+                <TextBlock FontSize="12" Foreground="{StaticResource TextMutedBrush}"
+                           VerticalAlignment="Center"
+                           Text="{Binding QueueInfo}"/>
+
+                <!-- Total size of files matching current filters -->
+                <TextBlock FontSize="12" Foreground="{StaticResource TextMutedBrush}"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0"
+                           Visibility="{Binding HasFolder, Converter={StaticResource BoolToVis}}">
+                    <Run Text="·" Foreground="{StaticResource BorderSubtleBrush}"/>
+                    <Run Text=" "/>
+                    <Run Text="{Binding FilteredTotalSizeFormatted, Mode=OneWay}"
+                         Foreground="{StaticResource TextSecondaryBrush}" FontWeight="SemiBold"/>
+                    <Run Text=" total"/>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <!-- ════════════════  SESSION BANNER  ══════════════════════════ -->
+        <Border Grid.Row="3"
+                Background="#1A3B82F6"
+                BorderBrush="#4A3B82F6"
+                BorderThickness="0,0,0,1"
+                Padding="24,8"
+                Visibility="{Binding HasSessionBanner, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <TextBlock Text="{Binding SessionBanner}"
+                           FontSize="13" Foreground="#A0C4FF"
+                           VerticalAlignment="Center"/>
+                <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Background="Transparent" BorderThickness="0"
+                        Cursor="Hand" Padding="4"
+                        Command="{Binding StartFreshCommand}"
+                        ToolTip="Clear saved session and restart from the beginning">
+                    <TextBlock Text="Start fresh ↺" FontSize="12"
+                               Foreground="#6A90C0"
+                               TextDecorations="Underline"/>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- ════════════════  MAIN AREA  ════════════════════════════ -->
+        <Grid Grid.Row="4" Margin="24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="280"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ── Left: Card + Action buttons ── -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Card Stack -->
+                <views:CardStackControl Grid.Row="0"
+                                        x:Name="CardStack"
+                                        DataContext="{Binding}"
+                                        Focusable="True"/>
+
+                <!-- Action Buttons -->
+                <Grid Grid.Row="1" Margin="0,24,0,0"
+                      Visibility="{Binding HasCurrentFile, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+
+                        <!-- DELETE button -->
+                        <StackPanel HorizontalAlignment="Center" Margin="0,0,20,0">
+                            <Button Style="{StaticResource DeleteButtonStyle}"
+                                    Click="DeleteButton_Click"
+                                    ToolTip="Delete (← arrow key)"
+                                    AutomationProperties.Name="Delete file"
+                                    Margin="0,0,0,6">
+                                <TextBlock Text="✕"/>
+                            </Button>
+                            <TextBlock Text="Delete" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- BUCKET button -->
+                        <StackPanel HorizontalAlignment="Center" Margin="0,0,20,0">
+                            <Button Style="{StaticResource BucketButtonStyle}"
+                                    x:Name="BucketButton"
+                                    Click="BucketButton_Click"
+                                    AutomationProperties.Name="Add to review bucket"
+                                    Margin="0,0,0,6">
+                                <TextBlock Text="🪣"/>
+                            </Button>
+                            <TextBlock Text="Bucket (B)" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- KEEP button -->
+                        <StackPanel HorizontalAlignment="Center">
+                            <Button Style="{StaticResource KeepButtonStyle}"
+                                    Click="KeepButton_Click"
+                                    ToolTip="Keep (→ arrow key)"
+                                    AutomationProperties.Name="Keep file"
+                                    Margin="0,0,0,6">
+                                <TextBlock Text="✓"/>
+                            </Button>
+                            <TextBlock Text="Keep" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <!-- ── Right: Stats + Buckets panel ── -->
+            <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Top">
+
+                <TextBlock Text="SESSION STATS"
+                           FontSize="11" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="0,0,0,12"
+                           AutomationProperties.HeadingLevel="Level2"/>
+
+                <views:StatsPanel DataContext="{Binding}" Margin="0,0,0,12"/>
+
+                <Button Style="{StaticResource BaseButtonStyle}"
+                        Command="{Binding ResetStatsCommand}"
+                        HorizontalAlignment="Stretch"
+                        Margin="0,0,0,20">
+                    <TextBlock Text="↺ Reset stats"/>
+                </Button>
+
+                <!-- Review Buckets section -->
+                <Grid Margin="0,0,0,10"
+                      Visibility="{Binding HasBuckets, Converter={StaticResource BoolToVis}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="REVIEW BUCKETS"
+                               FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               AutomationProperties.HeadingLevel="Level2"/>
+                    <Button Grid.Column="1"
+                            x:Name="NewBucketButton"
+                            Click="NewBucketHeader_Click"
+                            Background="Transparent" BorderThickness="0"
+                            Cursor="Hand" Padding="4,2"
+                            ToolTip="Create new bucket"
+                            AutomationProperties.Name="Create new bucket">
+                        <TextBlock Text="⊕" FontSize="16"
+                                   Foreground="{StaticResource AccentBucketBrush}"/>
+                    </Button>
+                </Grid>
+
+                <views:BucketsPanel x:Name="BucketsPanelControl"
+                                    Visibility="{Binding HasBuckets, Converter={StaticResource BoolToVis}}"
+                                    Margin="0,0,0,16"/>
+
+                <!-- Tip box -->
+                <Border Background="{StaticResource BgSurfaceBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="14,12"
+                        AutomationProperties.Name="Keyboard shortcuts">
+                    <StackPanel>
+                        <TextBlock Text="⌨ Keyboard shortcuts"
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,0,0,10"
+                                   AutomationProperties.HeadingLevel="Level3"/>
+
+                        <!-- Shortcut rows: kbd badge + label -->
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Background="#22FFFFFF" BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="1" CornerRadius="5" Padding="4,3" HorizontalAlignment="Center">
+                                <TextBlock Text="←" FontSize="11" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Center" FontFamily="Consolas, Courier New, Monospace"/>
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="Delete file" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Background="#22FFFFFF" BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="1" CornerRadius="5" Padding="4,3" HorizontalAlignment="Center">
+                                <TextBlock Text="→" FontSize="11" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Center" FontFamily="Consolas, Courier New, Monospace"/>
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="Keep file" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Background="#22FFFFFF" BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="1" CornerRadius="5" Padding="4,3" HorizontalAlignment="Center">
+                                <TextBlock Text="B" FontSize="11" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Center" FontFamily="Consolas, Courier New, Monospace"/>
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="Add to new bucket" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Background="#22FFFFFF" BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="1" CornerRadius="5" Padding="4,3" HorizontalAlignment="Center">
+                                <TextBlock Text="O" FontSize="11" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Center" FontFamily="Consolas, Courier New, Monospace"/>
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="Open in default app" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Background="#22FFFFFF" BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="1" CornerRadius="5" Padding="4,3" HorizontalAlignment="Center">
+                                <TextBlock Text="L" FontSize="11" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Center" FontFamily="Consolas, Courier New, Monospace"/>
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="Open file location" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
