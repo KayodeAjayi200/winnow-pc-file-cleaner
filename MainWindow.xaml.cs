@@ -130,6 +130,19 @@ public partial class MainWindow : Window
         SoundService.Instance.Volume = e.NewValue;
     }
 
+    private void BrowseDeviceButton_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new Views.MtpDevicePickerWindow { Owner = this };
+        if (picker.ShowDialog() == true
+            && picker.SelectedDeviceId  != null
+            && picker.SelectedFolderPath != null
+            && picker.SelectedDeviceName != null)
+        {
+            _vm.LoadMtpFiles(picker.SelectedDeviceId, picker.SelectedFolderPath, picker.SelectedDeviceName);
+        }
+        CardStack.Focus();
+    }
+
     private void SubfolderPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         _vm.IncludeSubfolders = !_vm.IncludeSubfolders;

@@ -80,7 +80,7 @@ public partial class CardStackControl : System.Windows.Controls.UserControl
                 break;
             case Key.L:
                 if (VM?.CurrentFile is { } fLoc)
-                    FilePreviewControl.OpenFileLocation(fLoc.FullPath);
+                    FilePreviewControl.OpenFileLocation(fLoc);
                 break;
         }
     }
@@ -98,7 +98,7 @@ public partial class CardStackControl : System.Windows.Controls.UserControl
     {
         if (VM?.CurrentFile is { } file)
         {
-            FilePreviewControl.OpenFileLocation(file.FullPath);
+            FilePreviewControl.OpenFileLocation(file);
             Focus();
         }
     }

@@ -11,11 +11,20 @@ public class FileItem : INotifyPropertyChanged
     public DateTime LastModified { get; init; }
     public FileTypeCategory Category { get; init; }
 
+    // ── MTP (portable device) fields ──────────────────────────────────────────
+    public bool   IsMtp        { get; init; }
+    /// <summary>WPD device ID string (e.g. "\\?\usb#..."). Null for local files.</summary>
+    public string? MtpDeviceId { get; init; }
+    /// <summary>WPD object persistent unique ID. Null for local files.</summary>
+    public string? MtpObjectId { get; init; }
+
     public string SizeFormatted  => FormatSize(Size);
     public string CategoryLabel  => Category.ToString();
     public string IconChar       => GetIconChar(Category);
     public string CategoryColor  => GetCategoryColor(Category);
-    public string DirectoryPath  => System.IO.Path.GetDirectoryName(FullPath) ?? string.Empty;
+    public string DirectoryPath  => IsMtp
+        ? System.IO.Path.GetDirectoryName(FullPath.Replace('/', '\\')) ?? FullPath
+        : System.IO.Path.GetDirectoryName(FullPath) ?? string.Empty;
 
     // ── Duplicate detection ───────────────────────────────────────────────────
 

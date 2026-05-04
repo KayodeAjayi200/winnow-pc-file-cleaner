@@ -22,6 +22,11 @@ public class MainViewModel : INotifyPropertyChanged
     private DispatcherTimer?         _scanTimer;
     private DispatcherTimer?         _bannerTimer;
 
+    // MTP state
+    private string? _mtpDeviceId;
+    private string  _mtpDeviceName = string.Empty;
+    private bool    _mtpPermanentDeleteWarningShown;
+
     // ── Bindable properties ────────────────────────────────────────────────────
 
     private string _folderPath = string.Empty;
@@ -171,8 +176,18 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public bool HasCurrentFile => CurrentFile != null;
-    public bool HasFolder      => !string.IsNullOrWhiteSpace(FolderPath) && Directory.Exists(FolderPath);
+    public bool HasFolder      => IsMtpSource
+        || (!string.IsNullOrWhiteSpace(FolderPath) && Directory.Exists(FolderPath));
     public bool IsComplete     => _allFiles.Count > 0 && _currentIndex >= _allFiles.Count;
+
+    // ── MTP properties ─────────────────────────────────────────────────────────
+
+    private bool _isMtpSource;
+    public bool IsMtpSource
+    {
+        get => _isMtpSource;
+        private set { _isMtpSource = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasFolder)); }
+    }
 
     // ── Buckets ────────────────────────────────────────────────────────────────
 
@@ -272,14 +287,28 @@ public class MainViewModel : INotifyPropertyChanged
 
         try
         {
-            await FileScanner.ScanStreamingAsync(
-                FolderPath, SelectedTypeFilter, SelectedDateFilter, IncludeSubfolders,
-                item =>
-                {
-                    lock (_pendingLock)
-                        _pendingFiles.Add(item);
-                },
-                ct);
+            if (IsMtpSource && _mtpDeviceId != null)
+            {
+                await MtpDeviceService.ScanAsync(
+                    _mtpDeviceId, FolderPath,
+                    IncludeSubfolders, SelectedTypeFilter, SelectedDateFilter,
+                    item =>
+                    {
+                        lock (_pendingLock) _pendingFiles.Add(item);
+                    },
+                    ct);
+            }
+            else
+            {
+                await FileScanner.ScanStreamingAsync(
+                    FolderPath, SelectedTypeFilter, SelectedDateFilter, IncludeSubfolders,
+                    item =>
+                    {
+                        lock (_pendingLock)
+                            _pendingFiles.Add(item);
+                    },
+                    ct);
+            }
         }
         catch (OperationCanceledException) { return; }
         finally
@@ -290,8 +319,8 @@ public class MainViewModel : INotifyPropertyChanged
         FlushPendingFiles(); // final flush
         IsScanning = false;
 
-        // Restore session (if one exists for this folder + same filters)
-        TryRestoreSession();
+        // Restore session (only for local folders)
+        if (!IsMtpSource) TryRestoreSession();
 
         // Run duplicate detection in background without blocking swiping
         _ = Task.Run(() =>
@@ -314,6 +343,16 @@ public class MainViewModel : INotifyPropertyChanged
             }
             catch (OperationCanceledException) { }
         }, ct);
+    }
+
+    /// <summary>Load files from a connected MTP device.</summary>
+    public void LoadMtpFiles(string deviceId, string folderPath, string deviceName)
+    {
+        _mtpDeviceId   = deviceId;
+        _mtpDeviceName = deviceName;
+        IsMtpSource    = true;
+        FolderPath     = folderPath;
+        LoadFiles();
     }
 
     private void FlushPendingFiles()
@@ -352,12 +391,44 @@ public class MainViewModel : INotifyPropertyChanged
     {
         if (CurrentFile == null) return;
         var file = CurrentFile;
-        if (RecycleBinService.SendToRecycleBin(file.FullPath))
+
+        if (file.IsMtp && file.MtpDeviceId != null)
         {
-            FilesDeleted++;
-            SpaceFreed += file.Size;
-            _filteredTotalSize = Math.Max(0, _filteredTotalSize - file.Size);
-            OnPropertyChanged(nameof(FilteredTotalSizeFormatted));
+            // MTP: permanent delete — warn user first
+            if (!_mtpPermanentDeleteWarningShown)
+            {
+                var result = System.Windows.MessageBox.Show(
+                    $"⚠️  Files on \"{_mtpDeviceName}\" will be permanently deleted.\n" +
+                    "There is no Recycle Bin for portable devices.\n\n" +
+                    "Do you want to continue?",
+                    "Permanent Delete Warning",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning);
+
+                if (result != System.Windows.MessageBoxResult.Yes)
+                    return;  // don't advance, let user reconsider
+
+                _mtpPermanentDeleteWarningShown = true;
+            }
+
+            if (MtpDeviceService.DeleteFile(file.MtpDeviceId, file.FullPath))
+            {
+                FilesDeleted++;
+                SpaceFreed += file.Size;
+                _filteredTotalSize = Math.Max(0, _filteredTotalSize - file.Size);
+                OnPropertyChanged(nameof(FilteredTotalSizeFormatted));
+            }
+        }
+        else
+        {
+            // Local: send to Recycle Bin
+            if (RecycleBinService.SendToRecycleBin(file.FullPath))
+            {
+                FilesDeleted++;
+                SpaceFreed += file.Size;
+                _filteredTotalSize = Math.Max(0, _filteredTotalSize - file.Size);
+                OnPropertyChanged(nameof(FilteredTotalSizeFormatted));
+            }
         }
         Advance();
         SaveSession();
@@ -385,7 +456,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         bucket.OnDeleteFile = (b, f) =>
         {
-            if (RecycleBinService.SendToRecycleBin(f.FullPath))
+            if (DeleteFileItem(f))
             {
                 FilesDeleted++;
                 SpaceFreed += f.Size;
@@ -407,7 +478,7 @@ public class MainViewModel : INotifyPropertyChanged
         {
             foreach (var f in b.Files.ToList())
             {
-                if (RecycleBinService.SendToRecycleBin(f.FullPath))
+                if (DeleteFileItem(f))
                 {
                     FilesDeleted++;
                     SpaceFreed += f.Size;
@@ -493,6 +564,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void SaveSession()
     {
+        if (IsMtpSource) return;  // MTP sessions aren't persistent
         if (!HasFolder) return;
         SessionService.Save(new SessionState(
             FolderPath:        FolderPath,
@@ -577,6 +649,17 @@ public class MainViewModel : INotifyPropertyChanged
             var candidate = Path.Combine(dir, $"{name} ({i}){ext}");
             if (!File.Exists(candidate)) return candidate;
         }
+    }
+
+    /// <summary>
+    /// Deletes a file, routing to MTP permanent delete or local Recycle Bin as appropriate.
+    /// Returns true if the delete succeeded.
+    /// </summary>
+    private bool DeleteFileItem(FileItem f)
+    {
+        if (f.IsMtp && f.MtpDeviceId != null)
+            return MtpDeviceService.DeleteFile(f.MtpDeviceId, f.FullPath);
+        return RecycleBinService.SendToRecycleBin(f.FullPath);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

@@ -16,4 +16,11 @@
     <Resource Include="app.ico"/>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- MediaDevices 1.10.2 (MIT) – local reference because NuGet cache is restricted in this env -->
+    <Reference Include="MediaDevices">
+      <HintPath>lib\MediaDevices.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>

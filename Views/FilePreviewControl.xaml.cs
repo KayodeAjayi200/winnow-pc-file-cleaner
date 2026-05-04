@@ -61,12 +61,22 @@ public partial class FilePreviewControl : UserControl
         }
     }
 
-    /// Opens Windows Explorer with the file pre-selected.
-    public static void OpenFileLocation(string path)
+    /// Opens Windows Explorer with the file pre-selected (local files only).
+    public static void OpenFileLocation(FileItem file)
     {
+        if (file.IsMtp)
+        {
+            System.Windows.MessageBox.Show(
+                "Open file location is not available for files on portable devices.",
+                "Not supported",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
         try
         {
-            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{file.FullPath}\"")
             {
                 UseShellExecute = true
             });
@@ -81,7 +91,13 @@ public partial class FilePreviewControl : UserControl
         }
     }
 
+    /// <summary>For backwards compat — local files only.</summary>
+    public static void OpenFileLocation(string path) =>
+        OpenFileLocation(new FileTinder.Models.FileItem { FullPath = path });
+
     // ── Main update ────────────────────────────────────────────────────────────
+
+    private string? _currentTempFile;
 
     private void UpdatePreview(FileItem? file)
     {
@@ -90,6 +106,12 @@ public partial class FilePreviewControl : UserControl
         _loadingPath = file?.FullPath;
 
         if (file == null) return;
+
+        if (file.IsMtp)
+        {
+            LoadMtpPreview(file);
+            return;
+        }
 
         switch (file.Category)
         {
@@ -111,8 +133,47 @@ public partial class FilePreviewControl : UserControl
                 ShowDefaultIcon(file);
                 break;
         }
+    }
 
-        // Always allow opening in default app — button is in the card info section
+    // ── MTP preview (download to temp, then load normally) ─────────────────────
+
+    private async void LoadMtpPreview(FileItem file)
+    {
+        if (file.MtpDeviceId == null) { ShowDefaultIcon(file); return; }
+
+        // Only download previewable types
+        if (file.Category != FileTypeCategory.Image && file.Category != FileTypeCategory.Video)
+        {
+            ShowDefaultIcon(file);
+            return;
+        }
+
+        LoadingText.Visibility = Visibility.Visible;
+        var expectedPath = file.FullPath;
+
+        var tempPath = await Task.Run(() =>
+            FileTinder.Services.MtpDeviceService.DownloadToTemp(file.MtpDeviceId, file.FullPath));
+
+        if (_loadingPath != expectedPath) return; // navigated away
+
+        // Clean previous temp file
+        if (_currentTempFile != null && _currentTempFile != tempPath)
+        {
+            try { System.IO.File.Delete(_currentTempFile); } catch { }
+        }
+        _currentTempFile = tempPath;
+
+        if (tempPath == null)
+        {
+            LoadingText.Visibility = Visibility.Collapsed;
+            ShowDefaultIcon(file);
+            return;
+        }
+
+        if (file.Category == FileTypeCategory.Image)
+            LoadImageAsync(tempPath);
+        else
+            LoadVideo(tempPath);
     }
 
     // ── Image loading (async, freeze for thread safety) ────────────────────────
