@@ -37,12 +37,15 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(() => CardStack.Focus());
         };
 
-        Loaded += (_, _) =>
+        Loaded += async (_, _) =>
         {
             CardStack.Focus();
             // Sync mute icon to the default muted state
             MuteIcon.Text = SoundService.Instance.MuteIcon;
             VolumeSlider.IsEnabled = !SoundService.Instance.IsMuted;
+
+            // Check for updates in background — never blocks startup
+            await _vm.CheckForUpdatesAsync();
         };
     }
 

@@ -19,6 +19,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- title bar -->
+            <RowDefinition Height="Auto"/>  <!-- update banner -->
             <RowDefinition Height="Auto"/>  <!-- folder picker -->
             <RowDefinition Height="Auto"/>  <!-- filter bar -->
             <RowDefinition Height="Auto"/>  <!-- session banner -->
@@ -78,8 +79,68 @@
             </Grid>
         </Border>
 
-        <!-- ════════════════  FOLDER PICKER  ════════════════════════ -->
+        <!-- ════════════  UPDATE BANNER  ════════════════════════════ -->
         <Border Grid.Row="1"
+                Background="#1210B981"
+                BorderBrush="#3010B981"
+                BorderThickness="0,0,0,1"
+                Padding="20,8"
+                Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="🆕" FontSize="15" Margin="0,0,8,0" FontFamily="Segoe UI Emoji"
+                               VerticalAlignment="Center"/>
+                    <TextBlock VerticalAlignment="Center" FontSize="13">
+                        <Run Text="Winnow v" Foreground="#6EE7B7"/>
+                        <Run Text="{Binding UpdateVersion}" FontWeight="Bold" Foreground="#6EE7B7"/>
+                        <Run Text=" is available" Foreground="#A7F3D0"/>
+                    </TextBlock>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <!-- Download progress (shown while downloading) -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,12,0"
+                                Visibility="{Binding IsDownloadingUpdate, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Downloading…" FontSize="12" Foreground="#6EE7B7"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ProgressBar Value="{Binding UpdateDownloadProgress}" Maximum="100"
+                                     Width="100" Height="8" VerticalAlignment="Center"
+                                     Foreground="#10B981" Background="#1A10B981"/>
+                        <TextBlock Text="{Binding UpdateDownloadProgress, StringFormat={}{0}%}"
+                                   FontSize="11" Foreground="#6EE7B7" VerticalAlignment="Center"
+                                   Margin="6,0,0,0"/>
+                    </StackPanel>
+                    <!-- Install button (hidden while downloading) -->
+                    <Button x:Name="InstallUpdateBtn"
+                            Command="{Binding InstallUpdateCommand}"
+                            Padding="12,6" Margin="0,0,8,0"
+                            Cursor="Hand"
+                            ToolTip="Download and install the update (app will restart)"
+                            Visibility="{Binding IsDownloadingUpdate, Converter={StaticResource BoolToVisInv}}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
+                                <Setter Property="Background" Value="#10B981"/>
+                                <Setter Property="BorderBrush"  Value="#059669"/>
+                                <Setter Property="Foreground"   Value="White"/>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⬇ " FontFamily="Segoe UI Emoji"/>
+                            <TextBlock Text="Download &amp; Install"/>
+                        </StackPanel>
+                    </Button>
+                    <!-- Dismiss -->
+                    <Button Command="{Binding DismissUpdateCommand}"
+                            Background="Transparent" BorderThickness="0"
+                            Cursor="Hand" Padding="6,4"
+                            ToolTip="Dismiss this update notification">
+                        <TextBlock Text="✕" FontSize="13" Foreground="#6EE7B7"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ════════════════  FOLDER PICKER  ════════════════════════ -->
+        <Border Grid.Row="2"
                 Background="{StaticResource BgSurfaceBrush}"
                 BorderBrush="{StaticResource BorderSubtleBrush}"
                 BorderThickness="0,0,0,1"
@@ -175,7 +236,7 @@
         </Border>
 
         <!-- ════════════════  FILTER BAR  ═══════════════════════════ -->
-        <Border Grid.Row="2"
+        <Border Grid.Row="3"
                 Background="{StaticResource BgDeepBrush}"
                 BorderBrush="{StaticResource BorderSubtleBrush}"
                 BorderThickness="0,0,0,1"
@@ -347,7 +408,7 @@
         </Border>
 
         <!-- ════════════════  SESSION BANNER  ══════════════════════════ -->
-        <Border Grid.Row="3"
+        <Border Grid.Row="4"
                 Background="#1A3B82F6"
                 BorderBrush="#4A3B82F6"
                 BorderThickness="0,0,0,1"
@@ -370,7 +431,7 @@
         </Border>
 
         <!-- ════════════════  MAIN AREA  ════════════════════════════ -->
-        <Grid Grid.Row="4" Margin="24">
+        <Grid Grid.Row="5" Margin="24">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="280"/>

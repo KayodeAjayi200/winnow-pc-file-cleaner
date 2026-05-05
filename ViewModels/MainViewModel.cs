@@ -228,6 +228,70 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ObservableCollection<FolderPreset> Presets { get; } = [];
 
+    // ── Auto-update ────────────────────────────────────────────────────────────
+
+    private bool _updateAvailable;
+    public bool UpdateAvailable
+    {
+        get => _updateAvailable;
+        private set { _updateAvailable = value; OnPropertyChanged(); }
+    }
+
+    private string _updateVersion = string.Empty;
+    public string UpdateVersion
+    {
+        get => _updateVersion;
+        private set { _updateVersion = value; OnPropertyChanged(); }
+    }
+
+    private string _updateDownloadUrl = string.Empty;
+
+    private bool _isDownloadingUpdate;
+    public bool IsDownloadingUpdate
+    {
+        get => _isDownloadingUpdate;
+        private set { _isDownloadingUpdate = value; OnPropertyChanged(); }
+    }
+
+    private int _updateDownloadProgress;
+    public int UpdateDownloadProgress
+    {
+        get => _updateDownloadProgress;
+        private set { _updateDownloadProgress = value; OnPropertyChanged(); }
+    }
+
+    public ICommand DismissUpdateCommand { get; private set; } = null!;
+    public ICommand InstallUpdateCommand { get; private set; } = null!;
+
+    public async Task CheckForUpdatesAsync()
+    {
+        var info = await FileTinder.Services.UpdateService.CheckAsync();
+        if (info == null) return;
+        _updateDownloadUrl = info.DownloadUrl;
+        UpdateVersion      = info.Version;
+        UpdateAvailable    = true;
+    }
+
+    private async void ExecuteInstallUpdate(object? _)
+    {
+        if (IsDownloadingUpdate) return;
+        IsDownloadingUpdate = true;
+        try
+        {
+            var progress = new Progress<int>(p => UpdateDownloadProgress = p);
+            await FileTinder.Services.UpdateService.DownloadAndInstallAsync(
+                _updateDownloadUrl, progress);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Update failed:\n{ex.Message}", "Update error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+        }
+        finally { IsDownloadingUpdate = false; }
+    }
+
     // ── View modes ─────────────────────────────────────────────────────────────
 
     private ViewMode _activeViewMode = ViewMode.Swipe;
@@ -336,6 +400,8 @@ public class MainViewModel : INotifyPropertyChanged
         EmptyRecycleBinCommand    = new RelayCommand(EmptyRecycleBin, () => HasBinContent);
         ToggleDeletedPanelCommand = new RelayCommand(() => ShowDeletedPanel = !ShowDeletedPanel);
         RestoreDeletedCommand     = new RelayCommand<DeletedEntry>(RestoreDeletedEntry);
+        DismissUpdateCommand      = new RelayCommand(() => UpdateAvailable = false);
+        InstallUpdateCommand      = new RelayCommand(() => ExecuteInstallUpdate(null));
 
         // Load presets
         foreach (var p in _presetsService.Load())

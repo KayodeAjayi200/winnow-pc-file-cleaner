@@ -1,0 +1,85 @@
+name: Build & Release
+
+# ── Triggers ──────────────────────────────────────────────────────────────────
+# Automatic: push a tag like v1.2.3
+# Manual:    Actions → Run workflow → enter version
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g. 1.0.1)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write   # needed to create a GitHub Release
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. .NET 10 ───────────────────────────────────────────────────────────
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # ── 3. Determine version ─────────────────────────────────────────────────
+      - name: Determine version
+        id: ver
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $v = '${{ github.event.inputs.version }}'
+          } else {
+            $v = '${{ github.ref_name }}'.TrimStart('v')
+          }
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+          echo "Version: $v"
+
+      # ── 4. Publish (self-contained single-file exe) ───────────────────────────
+      - name: Publish
+        shell: pwsh
+        run: |
+          dotnet publish FileTinder.csproj `
+            /p:PublishProfile=win-x64-singlefile `
+            /p:Version=${{ steps.ver.outputs.version }} `
+            --nologo -v q
+
+      # ── 5. Install Inno Setup 6 ───────────────────────────────────────────────
+      - name: Install Inno Setup 6
+        run: choco install innosetup --no-progress -y
+
+      # ── 6. Compile installer ──────────────────────────────────────────────────
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            /DAppVersion=${{ steps.ver.outputs.version }} `
+            installer.iss
+
+      # ── 7. Create GitHub Release & upload installer ───────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Winnow PC File Cleaner v${{ steps.ver.outputs.version }}"
+          body: |
+            ## Winnow PC File Cleaner v${{ steps.ver.outputs.version }}
+
+            ### Install
+            Download and run the installer below. The app will auto-detect future updates.
+
+            ### Upgrade
+            If you already have Winnow installed, click **Download & Install** inside the app,
+            or download the installer manually — it upgrades in-place.
+          files: installer/WinnowPCFileCleanerSetup-${{ steps.ver.outputs.version }}.exe
+          draft: false
+          prerelease: false
