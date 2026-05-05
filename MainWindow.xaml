@@ -181,7 +181,78 @@
                 BorderThickness="0,0,0,1"
                 Padding="24,10"
                 Visibility="{Binding HasFolder, Converter={StaticResource BoolToVis}}">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <DockPanel VerticalAlignment="Center">
+
+                <!-- View mode toggle buttons (right side) -->
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Margin="12,0,0,0">
+                    <TextBlock Text="View:"
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0"/>
+                    <Button x:Name="SwipeModeBtn"
+                            Content="🃏 Swipe"
+                            FontSize="12"
+                            Padding="10,5"
+                            Margin="0,0,4,0"
+                            Cursor="Hand"
+                            Click="SwipeModeBtn_Click"
+                            Tag="Swipe">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSwipeMode}" Value="True">
+                                        <Setter Property="Background" Value="#1A7C3AED"/>
+                                        <Setter Property="BorderBrush" Value="#7C3AED"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button x:Name="GridModeBtn"
+                            Content="⊞ Grid"
+                            FontSize="12"
+                            Padding="10,5"
+                            Margin="0,0,4,0"
+                            Cursor="Hand"
+                            Click="GridModeBtn_Click"
+                            Tag="Grid">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsGridMode}" Value="True">
+                                        <Setter Property="Background" Value="#1A7C3AED"/>
+                                        <Setter Property="BorderBrush" Value="#7C3AED"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button x:Name="ListModeBtn"
+                            Content="☰ List"
+                            FontSize="12"
+                            Padding="10,5"
+                            Cursor="Hand"
+                            Click="ListModeBtn_Click"
+                            Tag="List">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsListMode}" Value="True">
+                                        <Setter Property="Background" Value="#1A7C3AED"/>
+                                        <Setter Property="BorderBrush" Value="#7C3AED"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
+
+                <!-- Existing filter controls -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
                     <TextBlock Text="Type:" FontSize="13"
@@ -272,6 +343,7 @@
                     <Run Text=" total"/>
                 </TextBlock>
             </StackPanel>
+            </DockPanel>
         </Border>
 
         <!-- ════════════════  SESSION BANNER  ══════════════════════════ -->
@@ -311,11 +383,24 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Card Stack -->
+                <!-- Swipe mode -->
                 <views:CardStackControl Grid.Row="0"
                                         x:Name="CardStack"
                                         DataContext="{Binding}"
-                                        Focusable="True"/>
+                                        Focusable="True"
+                                        Visibility="{Binding IsSwipeMode, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Grid mode -->
+                <views:FileGridView Grid.Row="0"
+                                    x:Name="GridView"
+                                    DataContext="{Binding}"
+                                    Visibility="{Binding IsGridMode, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- List mode -->
+                <views:FileListView Grid.Row="0"
+                                    x:Name="ListView"
+                                    DataContext="{Binding}"
+                                    Visibility="{Binding IsListMode, Converter={StaticResource BoolToVis}}"/>
 
                 <!-- Action Buttons -->
                 <Grid Grid.Row="1" Margin="0,24,0,0"

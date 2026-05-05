@@ -257,4 +257,24 @@ public partial class MainWindow : Window
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2A2A3A"));
         CardStack.Focus();
     }
+
+    // ── View mode toggles ──────────────────────────────────────────────────────
+
+    private void SwipeModeBtn_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        _vm.ActiveViewMode = FileTinder.Models.ViewMode.Swipe;
+        CardStack.Focus();
+    }
+
+    private void GridModeBtn_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        _vm.ActiveViewMode = FileTinder.Models.ViewMode.Grid;
+        GridView.Focus();
+    }
+
+    private void ListModeBtn_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        _vm.ActiveViewMode = FileTinder.Models.ViewMode.List;
+        ListView.Focus();
+    }
 }

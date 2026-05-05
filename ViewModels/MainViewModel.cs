@@ -228,6 +228,29 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ObservableCollection<FolderPreset> Presets { get; } = [];
 
+    // ── View modes ─────────────────────────────────────────────────────────────
+
+    private ViewMode _activeViewMode = ViewMode.Swipe;
+    public ViewMode ActiveViewMode
+    {
+        get => _activeViewMode;
+        set
+        {
+            _activeViewMode = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsSwipeMode));
+            OnPropertyChanged(nameof(IsGridMode));
+            OnPropertyChanged(nameof(IsListMode));
+        }
+    }
+
+    public bool IsSwipeMode => ActiveViewMode == ViewMode.Swipe;
+    public bool IsGridMode  => ActiveViewMode == ViewMode.Grid;
+    public bool IsListMode  => ActiveViewMode == ViewMode.List;
+
+    /// <summary>All currently loaded files — used by grid and list views.</summary>
+    public IEnumerable<FileItem> AllFiles => _allFiles;
+
     // ── Sort options ───────────────────────────────────────────────────────────
 
     public IReadOnlyList<(SortMode Value, string Label)> SortModes { get; } =
@@ -360,6 +383,7 @@ public class MainViewModel : INotifyPropertyChanged
         ResetStats();
         RefreshCurrentCards();
         OnPropertyChanged(nameof(IsComplete));
+        OnPropertyChanged(nameof(AllFiles));
 
         // Flush discovered files to the sorted list every 250ms
         _scanTimer?.Stop();
@@ -457,6 +481,7 @@ public class MainViewModel : INotifyPropertyChanged
         _filteredTotalSize = _allFiles.Sum(f => f.Size);
         OnPropertyChanged(nameof(ScanStatusText));   // re-fire after size is known
         OnPropertyChanged(nameof(QueueInfo));
+        OnPropertyChanged(nameof(AllFiles));
         OnPropertyChanged(nameof(Progress));
         OnPropertyChanged(nameof(IsComplete));
         OnPropertyChanged(nameof(FilteredTotalSizeFormatted));
@@ -917,6 +942,57 @@ public class MainViewModel : INotifyPropertyChanged
         if (f.IsMtp && f.MtpDeviceId != null)
             return MtpDeviceService.DeleteFile(f.MtpDeviceId, f.FullPath);
         return RecycleBinService.SendToRecycleBin(f.FullPath);
+    }
+
+    // ── Grid / List view quick actions ─────────────────────────────────────────
+
+    /// <summary>Delete a file directly from grid/list mode.</summary>
+    public void QuickDeleteFile(FileItem f)
+    {
+        if (!DeleteFileItem(f)) return;
+
+        int idx = _allFiles.IndexOf(f);
+        _allFiles.Remove(f);
+        if (idx < _currentIndex) _currentIndex = Math.Max(0, _currentIndex - 1);
+
+        FilesDeleted++;
+        SpaceFreed += f.Size;
+        _filteredTotalSize = Math.Max(0, _filteredTotalSize - f.Size);
+        OnPropertyChanged(nameof(FilteredTotalSizeFormatted));
+
+        var entry = new DeletedEntry { File = f, DeletedAt = DateTime.Now };
+        PushUndo(entry);
+        DeletedEntries.Insert(0, entry);
+
+        OnPropertyChanged(nameof(AllFiles));
+        OnPropertyChanged(nameof(QueueInfo));
+        OnPropertyChanged(nameof(IsComplete));
+        RefreshCurrentCards();
+        SaveSession();
+        RefreshRecycleBinSize();
+    }
+
+    /// <summary>Mark a file as kept (skip) from grid/list mode.</summary>
+    public void QuickKeepFile(FileItem f)
+    {
+        int idx = _allFiles.IndexOf(f);
+        _allFiles.Remove(f);
+        if (idx < _currentIndex) _currentIndex = Math.Max(0, _currentIndex - 1);
+
+        FilesReviewed++;
+        OnPropertyChanged(nameof(AllFiles));
+        OnPropertyChanged(nameof(QueueInfo));
+        OnPropertyChanged(nameof(IsComplete));
+        RefreshCurrentCards();
+    }
+
+    /// <summary>Set the current card to the given file (for grid/list selection).</summary>
+    public void SelectFile(FileItem f)
+    {
+        int idx = _allFiles.IndexOf(f);
+        if (idx < 0) return;
+        _currentIndex = idx;
+        RefreshCurrentCards();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
