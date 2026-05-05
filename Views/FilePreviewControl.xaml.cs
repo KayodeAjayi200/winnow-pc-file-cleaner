@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using FileTinder.Models;
+using FileTinder.Services;
 
 namespace FileTinder.Views;
 
@@ -151,8 +152,8 @@ public partial class FilePreviewControl : UserControl
         LoadingText.Visibility = Visibility.Visible;
         var expectedPath = file.FullPath;
 
-        var tempPath = await Task.Run(() =>
-            FileTinder.Services.MtpDeviceService.DownloadToTemp(file.MtpDeviceId, file.FullPath));
+        var tempPath = await MtpDeviceService.RunSta(() =>
+            MtpDeviceService.DownloadToTemp(file.MtpDeviceId, file.FullPath));
 
         if (_loadingPath != expectedPath) return; // navigated away
 

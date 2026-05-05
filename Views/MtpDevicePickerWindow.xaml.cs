@@ -19,9 +19,30 @@ public partial class MtpDevicePickerWindow : Window
 
     // ── Load devices ──────────────────────────────────────────────────────────
 
+    private async void Refresh_Click(object sender, RoutedEventArgs e)
+    {
+        DeviceList.ItemsSource = null;
+        NoDevicesText.Visibility  = Visibility.Collapsed;
+        LoadingDevices.Visibility = Visibility.Visible;
+        FolderTree.Items.Clear();
+        OkButton.IsEnabled = false;
+        SelectedPathText.Text = string.Empty;
+        FolderHint.Visibility = Visibility.Visible;
+
+        var devices = await MtpDeviceService.RunSta(MtpDeviceService.GetConnectedDevices);
+        LoadingDevices.Visibility = Visibility.Collapsed;
+        if (devices.Count == 0)
+            NoDevicesText.Visibility = Visibility.Visible;
+        else
+        {
+            DeviceList.ItemsSource       = devices;
+            DeviceList.DisplayMemberPath = "FriendlyName";
+        }
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        var devices = await Task.Run(MtpDeviceService.GetConnectedDevices);
+        var devices = await MtpDeviceService.RunSta(MtpDeviceService.GetConnectedDevices);
 
         LoadingDevices.Visibility = Visibility.Collapsed;
 
@@ -47,7 +68,7 @@ public partial class MtpDevicePickerWindow : Window
         OkButton.IsEnabled     = false;
         SelectedPathText.Text  = string.Empty;
 
-        var roots = await Task.Run(() => MtpDeviceService.GetRootFolders(dev.DeviceId));
+        var roots = await MtpDeviceService.RunSta(() => MtpDeviceService.GetRootFolders(dev.DeviceId));
 
         foreach (var root in roots)
         {
@@ -85,7 +106,7 @@ public partial class MtpDevicePickerWindow : Window
 
         node.Items.Clear();
 
-        var subs = await Task.Run(() => MtpDeviceService.GetSubfolders(devId, folderPath));
+        var subs = await MtpDeviceService.RunSta(() => MtpDeviceService.GetSubfolders(devId, folderPath));
         foreach (var sub in subs)
             node.Items.Add(CreateNode(sub, devId));
 

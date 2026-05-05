@@ -93,9 +93,15 @@
 
             <!-- Device list -->
             <DockPanel Grid.Column="0">
-                <TextBlock DockPanel.Dock="Top" Text="DEVICES"
-                           FontSize="10" Foreground="#888"
-                           Margin="0,0,0,6" FontWeight="SemiBold"/>
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <TextBlock Text="DEVICES" FontSize="10" Foreground="#888"
+                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <Button DockPanel.Dock="Right" Content="↻" Click="Refresh_Click"
+                            ToolTip="Rescan for devices"
+                            Background="Transparent" BorderThickness="0"
+                            Foreground="#888" FontSize="14" Cursor="Hand"
+                            Padding="4,0" HorizontalAlignment="Right"/>
+                </DockPanel>
                 <Grid>
                     <ListBox x:Name="DeviceList" Style="{StaticResource ListStyle}"
                              SelectionChanged="DeviceList_SelectionChanged"/>

@@ -92,7 +92,7 @@ public static class MtpDeviceService
     {
         var cutoff = GetDateCutoff(dateFilter);
 
-        await Task.Run(() =>
+        await RunSta(() =>
         {
             using var device = OpenDevice(deviceId);
             try
@@ -200,6 +200,47 @@ public static class MtpDeviceService
         {
             return false;
         }
+    }
+
+    // ── STA threading helper ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Runs <paramref name="func"/> on a dedicated STA thread and returns its result as a Task.
+    /// WPD COM APIs require STA; the ThreadPool uses MTA, which causes silent failures.
+    /// </summary>
+    public static Task<T> RunSta<T>(Func<T> func)
+    {
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try   { tcs.SetResult(func()); }
+            catch (Exception ex) { tcs.SetException(ex); }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Start();
+        return tcs.Task;
+    }
+
+    /// <summary>Void STA runner with cancellation support — used for ScanAsync.</summary>
+    public static Task RunSta(Action action, CancellationToken ct = default)
+    {
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                action();
+                tcs.SetResult();
+            }
+            catch (OperationCanceledException) { tcs.SetCanceled(ct); }
+            catch (Exception ex) { tcs.SetException(ex); }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Start();
+        return tcs.Task;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
