@@ -31,8 +31,8 @@ public partial class FileListView : UserControl
 
     private void FileDataGrid_DoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (FileDataGrid.SelectedItem is FileItem f && !f.IsMtp)
-            FilePreviewControl.OpenInDefaultApp(f.FullPath);
+        if (FileDataGrid.SelectedItem is FileItem f)
+            FilePreviewControl.OpenInDefaultApp(f);
     }
 
     private void CtxDelete_Click(object sender, RoutedEventArgs e)
@@ -55,8 +55,8 @@ public partial class FileListView : UserControl
 
     private void CtxOpen_Click(object sender, RoutedEventArgs e)
     {
-        if (FileDataGrid.SelectedItem is FileItem f && !f.IsMtp)
-            FilePreviewControl.OpenInDefaultApp(f.FullPath);
+        if (FileDataGrid.SelectedItem is FileItem f)
+            FilePreviewControl.OpenInDefaultApp(f);
     }
 
     private void CtxOpenLocation_Click(object sender, RoutedEventArgs e)

@@ -61,8 +61,8 @@ public partial class FileGridView : UserControl
 
     private void QuickOpen_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement fe && fe.Tag is FileItem f && !f.IsMtp)
-            FilePreviewControl.OpenInDefaultApp(f.FullPath);
+        if (sender is FrameworkElement fe && fe.Tag is FileItem f)
+            FilePreviewControl.OpenInDefaultApp(f);
     }
 
     private void QuickOpenLocation_Click(object sender, RoutedEventArgs e)
