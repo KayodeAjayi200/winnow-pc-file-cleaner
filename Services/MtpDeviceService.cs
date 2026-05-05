@@ -9,7 +9,16 @@ namespace FileTinder.Services;
 public record MtpFolderInfo(string Path, string Name, long Size, int FileCount);
 
 /// <summary>Progress snapshot during a folder-copy operation.</summary>
-public record CopyProgress(int FilesCopied, int TotalFiles, long BytesCopied, long TotalBytes, string CurrentFile);
+public record CopyProgress(
+    int       FilesCopied,
+    int       TotalFiles,
+    long      BytesCopied,
+    long      TotalBytes,
+    string    CurrentFile,
+    double    SpeedBps         = 0,
+    TimeSpan? Eta              = null,
+    int       Errors           = 0,
+    string?   LocalPreviewPath = null);
 
 /// <summary>
 /// Wraps the Windows Portable Devices (WPD) API via the MediaDevices library.
@@ -239,8 +248,11 @@ public static class MtpDeviceService
 
     /// <summary>
     /// Copies a list of MTP folders (and all their contents) to a local directory.
-    /// Folder structure is preserved: each selected folder becomes a sub-directory
-    /// of <paramref name="localDestRoot"/>.
+    /// Uses a producer-consumer pipeline: the STA thread downloads files into a
+    /// bounded channel while the caller thread writes buffered bytes to disk,
+    /// overlapping MTP I/O with disk I/O for better throughput.
+    /// One device connection is kept for the entire batch to avoid per-file
+    /// Connect/Disconnect overhead.
     /// </summary>
     public static async Task CopyFoldersAsync(
         string                  deviceId,
@@ -250,7 +262,7 @@ public static class MtpDeviceService
         IProgress<CopyProgress>? progress,
         CancellationToken       ct = default)
     {
-        // First pass: collect all file paths + sizes so we can report progress
+        // ── Phase 1: Enumerate all files (single connection) ──────────────────
         var files = await RunSta(() =>
         {
             using var device = OpenDevice(deviceId);
@@ -281,41 +293,100 @@ public static class MtpDeviceService
         int  totalCount = files.Count;
         long bytesDone  = 0;
         int  countDone  = 0;
+        int  errorCount = 0;
+        var  startTime  = DateTime.UtcNow;
 
-        // Second pass: copy each file
-        foreach (var entry in files)
+        // ── Phase 2: Pipeline copy ────────────────────────────────────────────
+        // Producer (STA thread): downloads each file into memory, pushes to channel.
+        // Consumer (caller thread): reads from channel, writes bytes to disk async.
+        // Channel capacity of 4 provides back-pressure and caps peak memory use.
+        // Keeping one device open for the whole batch avoids per-file Connect overhead.
+
+        var channel = System.Threading.Channels.Channel.CreateBounded<
+            (string? localPath, byte[]? data, long fileSize, string fileName)>(
+            new System.Threading.Channels.BoundedChannelOptions(4)
+            {
+                FullMode     = System.Threading.Channels.BoundedChannelFullMode.Wait,
+                SingleReader = true,
+                SingleWriter = true,
+            });
+
+        // Producer: runs on the persistent STA thread with a single device connection.
+        var producer = RunSta(() =>
         {
-            string mtpFile = entry.mtpFile;
-            long   fileSize = entry.size;
-            ct.ThrowIfCancellationRequested();
-
-            // Build local path: strip the common prefix (localDestRoot is the
-            // parent of the selected folders, so we preserve sub-folder names)
-            string localPath = BuildLocalPath(localDestRoot, mtpFile);
-
-            if (skipExisting && File.Exists(localPath))
+            using var device = OpenDevice(deviceId);
+            try
             {
-                bytesDone += fileSize;
-                countDone++;
-                progress?.Report(new CopyProgress(countDone, totalCount, bytesDone, totalBytes,
-                    System.IO.Path.GetFileName(mtpFile)));
-                continue;
+                foreach (var (mtpFile, fileSize) in files)
+                {
+                    if (ct.IsCancellationRequested) break;
+
+                    string localPath = BuildLocalPath(localDestRoot, mtpFile);
+                    string fileName  = System.IO.Path.GetFileName(mtpFile);
+
+                    if (skipExisting && System.IO.File.Exists(localPath))
+                    {
+                        channel.Writer.WriteAsync((null, null, fileSize, fileName))
+                                      .AsTask().GetAwaiter().GetResult();
+                        continue;
+                    }
+
+                    try
+                    {
+                        var ms = new System.IO.MemoryStream((int)Math.Max(fileSize, 1024));
+                        device.DownloadFile(mtpFile, ms);
+                        channel.Writer.WriteAsync((localPath, ms.ToArray(), fileSize, fileName))
+                                      .AsTask().GetAwaiter().GetResult();
+                    }
+                    catch
+                    {
+                        System.Threading.Interlocked.Increment(ref errorCount);
+                        channel.Writer.WriteAsync((null, null, fileSize, fileName))
+                                      .AsTask().GetAwaiter().GetResult();
+                    }
+                }
             }
-
-            await RunSta(() =>
+            finally
             {
-                using var device = OpenDevice(deviceId);
-                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(localPath)!);
-                using var stream = new FileStream(localPath, FileMode.Create, FileAccess.Write);
-                device.DownloadFile(mtpFile, stream);
-            }, ct);
+                channel.Writer.Complete();
+            }
+        });
+
+        // Consumer: reads buffered data and writes to disk asynchronously,
+        // overlapping with the next MTP download happening on the STA.
+        await foreach (var (localPath, data, fileSize, fileName)
+                       in channel.Reader.ReadAllAsync(ct))
+        {
+            string? previewPath = null;
+            if (localPath != null && data != null)
+            {
+                System.IO.Directory.CreateDirectory(
+                    System.IO.Path.GetDirectoryName(localPath)!);
+                await System.IO.File.WriteAllBytesAsync(localPath, data, ct);
+                if (IsImageExtension(System.IO.Path.GetExtension(localPath)))
+                    previewPath = localPath;
+            }
 
             bytesDone += fileSize;
             countDone++;
-            progress?.Report(new CopyProgress(countDone, totalCount, bytesDone, totalBytes,
-                System.IO.Path.GetFileName(mtpFile)));
+            double elapsed  = (DateTime.UtcNow - startTime).TotalSeconds;
+            double speedBps = elapsed > 0.5 ? bytesDone / elapsed : 0;
+            TimeSpan? eta   = speedBps > 0
+                ? TimeSpan.FromSeconds((totalBytes - bytesDone) / speedBps)
+                : (TimeSpan?)null;
+            progress?.Report(new CopyProgress(
+                countDone, totalCount, bytesDone, totalBytes,
+                fileName, speedBps, eta, errorCount, previewPath));
         }
+
+        await producer; // propagate any unhandled producer exception
     }
+
+    private static readonly HashSet<string> _imageExts =
+        new(StringComparer.OrdinalIgnoreCase)
+        { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".heic", ".webp", ".tiff", ".tif" };
+
+    private static bool IsImageExtension(string ext) => _imageExts.Contains(ext);
 
     private static string BuildLocalPath(string localDestRoot, string mtpFile)
     {

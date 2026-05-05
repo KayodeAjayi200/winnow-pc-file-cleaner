@@ -229,6 +229,52 @@ public partial class MtpCopyWindow : Window
             ProgressLabel.Text     = $"{p.FilesCopied:N0} / {p.TotalFiles:N0} files  ·  "
                                    + $"{FormatSize(p.BytesCopied)} / {FormatSize(p.TotalBytes)}";
             CurrentFileText.Text   = p.CurrentFile;
+
+            // Speed
+            SpeedText.Text = p.SpeedBps >= 1_048_576
+                ? $"{p.SpeedBps / 1_048_576:F1} MB/s"
+                : p.SpeedBps >= 1024
+                    ? $"{p.SpeedBps / 1024:F0} KB/s"
+                    : string.Empty;
+
+            // ETA
+            if (p.Eta is { } eta && eta.TotalSeconds > 0)
+            {
+                EtaText.Text = eta.TotalHours >= 1
+                    ? $"Est. {(int)eta.TotalHours}h {eta.Minutes}m remaining"
+                    : eta.TotalMinutes >= 1
+                        ? $"Est. {(int)eta.TotalMinutes}m {eta.Seconds}s remaining"
+                        : $"Est. {eta.Seconds}s remaining";
+            }
+            else
+            {
+                EtaText.Text = string.Empty;
+            }
+
+            // Error count
+            if (p.Errors > 0)
+            {
+                ErrorCountText.Text       = $"⚠ {p.Errors} file{(p.Errors == 1 ? "" : "s")} skipped due to errors";
+                ErrorCountText.Visibility = Visibility.Visible;
+            }
+
+            // Live thumbnail for image files
+            if (p.LocalPreviewPath != null)
+            {
+                try
+                {
+                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                    bmp.BeginInit();
+                    bmp.DecodePixelWidth  = 128;
+                    bmp.CacheOption       = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    bmp.UriSource         = new Uri(p.LocalPreviewPath);
+                    bmp.EndInit();
+                    bmp.Freeze();
+                    ThumbImage.Source   = bmp;
+                    ThumbBorder.Visibility = Visibility.Visible;
+                }
+                catch { /* non-critical */ }
+            }
         });
 
         try

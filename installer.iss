@@ -6,7 +6,7 @@
 ;   3. Open this file in Inno Setup and click Build > Compile
 ; ─────────────────────────────────────────────────────────────────────────────
 
-#define AppName    "Winnow PC File Cleaner"
+#define AppName    "Windows PC File Cleaner"
 #define AppVersion "1.0.0"
 #define AppPublisher "Your Name"
 #define AppExeName "Winnow.exe"
@@ -19,8 +19,8 @@ AppVersion={#AppVersion}
 AppPublisherURL=https://github.com/
 AppSupportURL=https://github.com/
 AppUpdatesURL=https://github.com/
-DefaultDirName={autopf}\Winnow PC File Cleaner
-DefaultGroupName=Winnow PC File Cleaner
+DefaultDirName={autopf}\Windows PC File Cleaner
+DefaultGroupName=Windows PC File Cleaner
 AllowNoIcons=yes
 OutputDir=installer
 OutputBaseFilename=WinnowPCFileCleanerSetup-{#AppVersion}

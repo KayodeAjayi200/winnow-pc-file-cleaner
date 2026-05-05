@@ -240,12 +240,36 @@
 
         <!-- Progress area -->
         <StackPanel Grid.Row="6" x:Name="ProgressPanel" Visibility="Collapsed" Margin="0,0,0,16">
-            <Grid Margin="0,0,0,6">
-                <TextBlock x:Name="ProgressLabel"
-                           FontSize="12" Foreground="#ccc"/>
-                <TextBlock x:Name="ProgressPctText"
-                           HorizontalAlignment="Right"
-                           FontSize="12" Foreground="#4ade80" FontWeight="Bold"/>
+            <!-- Thumbnail + stats row -->
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <!-- Live thumbnail of currently copied file -->
+                <Border Grid.Column="0" Width="64" Height="64" CornerRadius="6"
+                        Background="#111" Margin="0,0,12,0"
+                        x:Name="ThumbBorder" Visibility="Collapsed">
+                    <Image x:Name="ThumbImage" Stretch="UniformToFill"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                </Border>
+                <!-- Count + bytes -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="ProgressLabel"
+                               FontSize="12" Foreground="#ccc"/>
+                    <TextBlock x:Name="EtaText"
+                               FontSize="11" Foreground="#888" Margin="0,2,0,0"/>
+                </StackPanel>
+                <!-- Speed + pct -->
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock x:Name="ProgressPctText"
+                               FontSize="12" Foreground="#4ade80" FontWeight="Bold"
+                               HorizontalAlignment="Right"/>
+                    <TextBlock x:Name="SpeedText"
+                               FontSize="11" Foreground="#7C3AED" FontWeight="SemiBold"
+                               HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                </StackPanel>
             </Grid>
             <ProgressBar x:Name="CopyProgressBar"
                          Height="8" Minimum="0" Maximum="100"
@@ -268,6 +292,10 @@
                        FontSize="11" Foreground="#666"
                        TextTrimming="CharacterEllipsis"
                        Margin="0,4,0,0"/>
+            <TextBlock x:Name="ErrorCountText"
+                       FontSize="11" Foreground="#f97316"
+                       Margin="0,2,0,0"
+                       Visibility="Collapsed"/>
         </StackPanel>
 
         <!-- Buttons -->

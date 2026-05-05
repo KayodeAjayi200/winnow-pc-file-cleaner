@@ -4,7 +4,7 @@
         xmlns:vm="clr-namespace:FileTinder.ViewModels"
         xmlns:views="clr-namespace:FileTinder.Views"
         xmlns:conv="clr-namespace:FileTinder.Converters"
-        Title="Winnow PC File Cleaner"
+        Title="Windows PC File Cleaner"
         Icon="app.ico"
         Width="1020" Height="720"
         MinWidth="800" MinHeight="620"
@@ -36,7 +36,7 @@
                     <TextBlock Text="🔥" FontSize="22" Margin="0,0,10,0"
                                FontFamily="Segoe UI Emoji"
                                Foreground="#FF6B35"/>
-                    <TextBlock Text="Winnow" FontSize="20" FontWeight="Bold"
+                    <TextBlock Text="Winnow PC" FontSize="20" FontWeight="Bold"
                                Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,10,0"/>
                     <Border Background="#1A7C3AED" CornerRadius="12" Padding="8,3" VerticalAlignment="Center">
                         <TextBlock Text="File cleaner" FontSize="11"
