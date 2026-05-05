@@ -21,39 +21,52 @@ public partial class MtpDevicePickerWindow : Window
 
     private async void Refresh_Click(object sender, RoutedEventArgs e)
     {
-        DeviceList.ItemsSource = null;
+        DeviceList.ItemsSource    = null;
         NoDevicesText.Visibility  = Visibility.Collapsed;
         LoadingDevices.Visibility = Visibility.Visible;
         FolderTree.Items.Clear();
-        OkButton.IsEnabled = false;
+        OkButton.IsEnabled    = false;
         SelectedPathText.Text = string.Empty;
         FolderHint.Visibility = Visibility.Visible;
 
-        var devices = await MtpDeviceService.RunSta(MtpDeviceService.GetConnectedDevices);
-        LoadingDevices.Visibility = Visibility.Collapsed;
-        if (devices.Count == 0)
-            NoDevicesText.Visibility = Visibility.Visible;
-        else
+        try
         {
-            DeviceList.ItemsSource       = devices;
-            DeviceList.DisplayMemberPath = "FriendlyName";
+            var devices = await MtpDeviceService.RunSta(MtpDeviceService.GetConnectedDevices);
+            LoadingDevices.Visibility = Visibility.Collapsed;
+            if (devices.Count == 0)
+                NoDevicesText.Visibility = Visibility.Visible;
+            else
+            {
+                DeviceList.ItemsSource       = devices;
+                DeviceList.DisplayMemberPath = "FriendlyName";
+            }
+        }
+        catch (Exception ex)
+        {
+            LoadingDevices.Visibility = Visibility.Collapsed;
+            ShowError("Could not scan for devices", ex);
         }
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        var devices = await MtpDeviceService.RunSta(MtpDeviceService.GetConnectedDevices);
-
-        LoadingDevices.Visibility = Visibility.Collapsed;
-
-        if (devices.Count == 0)
+        try
         {
-            NoDevicesText.Visibility = Visibility.Visible;
+            var devices = await MtpDeviceService.RunSta(MtpDeviceService.GetConnectedDevices);
+            LoadingDevices.Visibility = Visibility.Collapsed;
+
+            if (devices.Count == 0)
+                NoDevicesText.Visibility = Visibility.Visible;
+            else
+            {
+                DeviceList.ItemsSource       = devices;
+                DeviceList.DisplayMemberPath = "FriendlyName";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            DeviceList.ItemsSource   = devices;
-            DeviceList.DisplayMemberPath = "FriendlyName";
+            LoadingDevices.Visibility = Visibility.Collapsed;
+            ShowError("Could not scan for devices", ex);
         }
     }
 
@@ -65,19 +78,24 @@ public partial class MtpDevicePickerWindow : Window
 
         FolderHint.Visibility  = Visibility.Collapsed;
         FolderTree.Items.Clear();
-        OkButton.IsEnabled     = false;
-        SelectedPathText.Text  = string.Empty;
+        OkButton.IsEnabled    = false;
+        SelectedPathText.Text = string.Empty;
 
-        var roots = await MtpDeviceService.RunSta(() => MtpDeviceService.GetRootFolders(dev.DeviceId));
-
-        foreach (var root in roots)
+        try
         {
-            var node = CreateNode(root, dev.DeviceId);
-            FolderTree.Items.Add(node);
-        }
+            var roots = await MtpDeviceService.RunSta(() => MtpDeviceService.GetRootFolders(dev.DeviceId));
 
-        if (FolderTree.Items.Count == 0)
+            foreach (var root in roots)
+                FolderTree.Items.Add(CreateNode(root, dev.DeviceId));
+
+            if (FolderTree.Items.Count == 0)
+                FolderHint.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Could not read folders from \"{dev.FriendlyName}\"", ex);
             FolderHint.Visibility = Visibility.Visible;
+        }
     }
 
     // ── Folder tree ───────────────────────────────────────────────────────────
@@ -106,12 +124,31 @@ public partial class MtpDevicePickerWindow : Window
 
         node.Items.Clear();
 
-        var subs = await MtpDeviceService.RunSta(() => MtpDeviceService.GetSubfolders(devId, folderPath));
-        foreach (var sub in subs)
-            node.Items.Add(CreateNode(sub, devId));
+        try
+        {
+            var subs = await MtpDeviceService.RunSta(() => MtpDeviceService.GetSubfolders(devId, folderPath));
+            foreach (var sub in subs)
+                node.Items.Add(CreateNode(sub, devId));
 
-        if (node.Items.Count == 0)
-            node.Items.Add(new TreeViewItem { Header = "(empty)", IsEnabled = false });
+            if (node.Items.Count == 0)
+                node.Items.Add(new TreeViewItem { Header = "(empty)", IsEnabled = false });
+        }
+        catch
+        {
+            node.Items.Add(new TreeViewItem { Header = "⚠ Could not load", IsEnabled = false });
+        }
+    }
+
+    // ── Error helper ──────────────────────────────────────────────────────────
+
+    private void ShowError(string message, Exception? ex = null)
+    {
+        var detail = ex != null ? $"\n\n{ex.GetType().Name}: {ex.Message}" : string.Empty;
+        System.Windows.MessageBox.Show(
+            message + detail,
+            "Device Error",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
     }
 
     private void FolderTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)

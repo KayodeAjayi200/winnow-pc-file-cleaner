@@ -20,20 +20,23 @@ public static class MtpDeviceService
             return MediaDevice.GetDevices()
                 .Select(d =>
                 {
-                    try
+                    using (d)   // MediaDevice is IDisposable; release COM object when done
                     {
-                        d.Connect();
-                        var info = new MtpDeviceInfo
+                        try
                         {
-                            DeviceId    = d.DeviceId,
-                            FriendlyName = d.FriendlyName ?? d.Description ?? d.DeviceId
-                        };
-                        d.Disconnect();
-                        return info;
-                    }
-                    catch
-                    {
-                        return new MtpDeviceInfo { DeviceId = d.DeviceId, FriendlyName = d.DeviceId };
+                            d.Connect();
+                            var info = new MtpDeviceInfo
+                            {
+                                DeviceId     = d.DeviceId,
+                                FriendlyName = d.FriendlyName ?? d.Description ?? d.DeviceId
+                            };
+                            d.Disconnect();
+                            return info;
+                        }
+                        catch
+                        {
+                            return new MtpDeviceInfo { DeviceId = d.DeviceId, FriendlyName = d.DeviceId };
+                        }
                     }
                 })
                 .ToList();
