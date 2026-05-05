@@ -5,6 +5,12 @@ using System.Windows.Threading;
 
 namespace FileTinder.Services;
 
+/// <summary>Metadata about an MTP/WPD folder including name, path, file count, and total size.</summary>
+public record MtpFolderInfo(string Path, string Name, long Size, int FileCount);
+
+/// <summary>Progress snapshot during a folder-copy operation.</summary>
+public record CopyProgress(int FilesCopied, int TotalFiles, long BytesCopied, long TotalBytes, string CurrentFile);
+
 /// <summary>
 /// Wraps the Windows Portable Devices (WPD) API via the MediaDevices library.
 /// Provides device enumeration, file listing, preview streaming, and delete.
@@ -182,6 +188,152 @@ public static class MtpDeviceService
                 f.Delete();
         }
         catch { }
+    }
+
+    // ── Folder metadata ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns immediate sub-directory names under <paramref name="path"/> together
+    /// with their total file count and combined size.  Sizes are calculated lazily
+    /// in a background STA task so the caller can show names immediately.
+    /// </summary>
+    public static async Task<List<MtpFolderInfo>> GetSubfolderInfosAsync(
+        string deviceId, string path, CancellationToken ct = default)
+    {
+        return await RunSta(() =>
+        {
+            using var device = OpenDevice(deviceId);
+            var dir = device.GetDirectoryInfo(path);
+            var result = new List<MtpFolderInfo>();
+
+            foreach (var sub in dir.EnumerateDirectories())
+            {
+                ct.ThrowIfCancellationRequested();
+                long size  = 0;
+                int  count = 0;
+                try
+                {
+                    foreach (var f in device.EnumerateFiles(sub.FullName, "*", SearchOption.AllDirectories))
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        try
+                        {
+                            var info = device.GetFileInfo(f);
+                            size  += (long)info.Length;
+                            count++;
+                        }
+                        catch { }
+                    }
+                }
+                catch (OperationCanceledException) { throw; }
+                catch { }
+
+                result.Add(new MtpFolderInfo(sub.FullName, sub.Name, size, count));
+            }
+
+            return result;
+        });
+    }
+
+    // ── Copy to PC ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Copies a list of MTP folders (and all their contents) to a local directory.
+    /// Folder structure is preserved: each selected folder becomes a sub-directory
+    /// of <paramref name="localDestRoot"/>.
+    /// </summary>
+    public static async Task CopyFoldersAsync(
+        string                  deviceId,
+        IList<string>           mtpFolderPaths,
+        string                  localDestRoot,
+        bool                    skipExisting,
+        IProgress<CopyProgress>? progress,
+        CancellationToken       ct = default)
+    {
+        // First pass: collect all file paths + sizes so we can report progress
+        var files = await RunSta(() =>
+        {
+            using var device = OpenDevice(deviceId);
+            var list = new List<(string mtpFile, long size)>();
+            foreach (var folder in mtpFolderPaths)
+            {
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    foreach (var f in device.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        try
+                        {
+                            var info = device.GetFileInfo(f);
+                            list.Add((f, (long)info.Length));
+                        }
+                        catch { list.Add((f, 0)); }
+                    }
+                }
+                catch (OperationCanceledException) { throw; }
+                catch { }
+            }
+            return list;
+        });
+
+        long totalBytes = files.Sum(f => f.size);
+        int  totalCount = files.Count;
+        long bytesDone  = 0;
+        int  countDone  = 0;
+
+        // Second pass: copy each file
+        foreach (var entry in files)
+        {
+            string mtpFile = entry.mtpFile;
+            long   fileSize = entry.size;
+            ct.ThrowIfCancellationRequested();
+
+            // Build local path: strip the common prefix (localDestRoot is the
+            // parent of the selected folders, so we preserve sub-folder names)
+            string localPath = BuildLocalPath(localDestRoot, mtpFile);
+
+            if (skipExisting && File.Exists(localPath))
+            {
+                bytesDone += fileSize;
+                countDone++;
+                progress?.Report(new CopyProgress(countDone, totalCount, bytesDone, totalBytes,
+                    System.IO.Path.GetFileName(mtpFile)));
+                continue;
+            }
+
+            await RunSta(() =>
+            {
+                using var device = OpenDevice(deviceId);
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(localPath)!);
+                using var stream = new FileStream(localPath, FileMode.Create, FileAccess.Write);
+                device.DownloadFile(mtpFile, stream);
+            }, ct);
+
+            bytesDone += fileSize;
+            countDone++;
+            progress?.Report(new CopyProgress(countDone, totalCount, bytesDone, totalBytes,
+                System.IO.Path.GetFileName(mtpFile)));
+        }
+    }
+
+    private static string BuildLocalPath(string localDestRoot, string mtpFile)
+    {
+        // mtpFile:       \Internal Storage\202503_xxx\DCIM\IMG_001.JPG
+        // We want:       localDestRoot\202503_xxx\DCIM\IMG_001.JPG
+        //
+        // Strategy: skip the first two segments (\Internal Storage and possibly
+        // a top-level root), keeping from the first "meaningful" folder.
+        // We split on backslash, drop empty + the first segment (root/storage name),
+        // and keep the rest.
+        var parts = mtpFile.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        // Drop \Internal Storage (or whichever root storage the user selected)
+        // by keeping segments starting at index 1 (i.e. the monthly folder onward).
+        // If there are fewer than 2 parts, use the filename directly.
+        string relative = parts.Length >= 2
+            ? string.Join(System.IO.Path.DirectorySeparatorChar, parts.Skip(1))
+            : parts[0];
+        return System.IO.Path.Combine(localDestRoot, relative);
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────────

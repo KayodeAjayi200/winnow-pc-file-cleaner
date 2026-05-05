@@ -1,0 +1,297 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.IO;
+using System.Runtime.CompilerServices;
+using System.Windows;
+using System.Windows.Forms;
+using FileTinder.Models;
+using FileTinder.Services;
+
+namespace FileTinder.Views;
+
+/// <summary>
+/// Lets the user copy selected MTP folders (e.g. monthly iPhone photo albums)
+/// to a local destination with progress feedback.
+/// </summary>
+public partial class MtpCopyWindow : Window
+{
+    // ── View model items ───────────────────────────────────────────────────────
+
+    public class FolderItem : INotifyPropertyChanged
+    {
+        public string Path        { get; init; } = string.Empty;
+        public string DisplayName { get; init; } = string.Empty;
+        public long   Size        { get; init; }
+        public int    FileCount   { get; init; }
+
+        public string SizeText      => FormatSize(Size);
+        public string FileCountText => FileCount == 1 ? "1 file" : $"{FileCount:N0} files";
+
+        private bool _isSelected = true;
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set { _isSelected = value; OnPropertyChanged(); }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? p = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+
+        private static string FormatSize(long bytes)
+        {
+            if (bytes >= 1_073_741_824) return $"{bytes / 1_073_741_824.0:F1} GB";
+            if (bytes >= 1_048_576)     return $"{bytes / 1_048_576.0:F1} MB";
+            if (bytes >= 1_024)         return $"{bytes / 1_024.0:F1} KB";
+            return $"{bytes} B";
+        }
+    }
+
+    // ── Fields ─────────────────────────────────────────────────────────────────
+
+    private readonly string _deviceId;
+    private string          _sourcePath;
+    private string          _destPath = string.Empty;
+    private CancellationTokenSource? _cts;
+    private bool _copying;
+
+    private readonly ObservableCollection<FolderItem> _folders = new();
+
+    // ── Constructor ────────────────────────────────────────────────────────────
+
+    public MtpCopyWindow(string deviceId, string deviceName, string sourcePath)
+    {
+        InitializeComponent();
+        _deviceId   = deviceId;
+        _sourcePath = sourcePath;
+
+        DeviceNameText.Text  = $"Device: {deviceName}";
+        SourcePathText.Text  = sourcePath;
+        FoldersItemsControl.ItemsSource = _folders;
+
+        Loaded += async (_, _) => await LoadFoldersAsync();
+    }
+
+    // ── Folder loading ─────────────────────────────────────────────────────────
+
+    private async Task LoadFoldersAsync()
+    {
+        LoadingPanel.Visibility      = Visibility.Visible;
+        FolderScrollViewer.Visibility = Visibility.Collapsed;
+        EmptyText.Visibility          = Visibility.Collapsed;
+        CopyBtn.IsEnabled             = false;
+        _folders.Clear();
+
+        try
+        {
+            var infos = await MtpDeviceService.GetSubfolderInfosAsync(
+                _deviceId, _sourcePath, CancellationToken.None);
+
+            _folders.Clear();
+            foreach (var info in infos.OrderByDescending(i => i.Name))
+            {
+                _folders.Add(new FolderItem
+                {
+                    Path        = info.Path,
+                    DisplayName = info.Name,
+                    Size        = info.Size,
+                    FileCount   = info.FileCount
+                });
+            }
+
+            LoadingPanel.Visibility = Visibility.Collapsed;
+
+            if (_folders.Count == 0)
+            {
+                EmptyText.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                FolderScrollViewer.Visibility = Visibility.Visible;
+                UpdateSummary();
+                RefreshCopyBtn();
+            }
+        }
+        catch (Exception ex)
+        {
+            LoadingPanel.Visibility = Visibility.Collapsed;
+            EmptyText.Text          = $"Error loading folders: {ex.Message}";
+            EmptyText.Visibility    = Visibility.Visible;
+        }
+    }
+
+    // ── Source change ──────────────────────────────────────────────────────────
+
+    private async void ChangeSource_Click(object sender, RoutedEventArgs e)
+    {
+        // Show a simple input dialog asking for a path, or reuse the MTP folder
+        // picker.  For simplicity we show a text input MessageBox-style.
+        var win = new MtpFolderInputDialog(_deviceId) { Owner = this };
+        if (win.ShowDialog() == true && win.SelectedPath is { } newPath)
+        {
+            _sourcePath         = newPath;
+            SourcePathText.Text = newPath;
+            await LoadFoldersAsync();
+        }
+    }
+
+    // ── Destination browse ─────────────────────────────────────────────────────
+
+    private void BrowseDest_Click(object sender, RoutedEventArgs e)
+    {
+        using var dlg = new FolderBrowserDialog
+        {
+            Description         = "Select destination folder",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = true
+        };
+        if (!string.IsNullOrEmpty(_destPath))
+            dlg.InitialDirectory = _destPath;
+
+        if (dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        {
+            _destPath         = dlg.SelectedPath;
+            DestPathText.Text = _destPath;
+            RefreshCopyBtn();
+        }
+    }
+
+    // ── Select all / none ──────────────────────────────────────────────────────
+
+    private void SelectAll_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var f in _folders) f.IsSelected = true;
+        UpdateSummary();
+        RefreshCopyBtn();
+    }
+
+    private void SelectNone_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var f in _folders) f.IsSelected = false;
+        UpdateSummary();
+        RefreshCopyBtn();
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    private void RefreshCopyBtn()
+    {
+        CopyBtn.IsEnabled = !_copying
+            && !string.IsNullOrEmpty(_destPath)
+            && _folders.Any(f => f.IsSelected);
+    }
+
+    private void UpdateSummary()
+    {
+        var selected = _folders.Where(f => f.IsSelected).ToList();
+        if (selected.Count == 0)
+        {
+            SummaryText.Text = "No folders selected";
+            return;
+        }
+
+        long totalBytes = selected.Sum(f => f.Size);
+        int  totalFiles = selected.Sum(f => f.FileCount);
+        SummaryText.Text = $"{selected.Count} folder{(selected.Count == 1 ? "" : "s")} · "
+                         + $"{totalFiles:N0} files · "
+                         + FormatSize(totalBytes);
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes >= 1_073_741_824) return $"{bytes / 1_073_741_824.0:F1} GB";
+        if (bytes >= 1_048_576)     return $"{bytes / 1_048_576.0:F1} MB";
+        if (bytes >= 1_024)         return $"{bytes / 1_024.0:F1} KB";
+        return $"{bytes} B";
+    }
+
+    // ── Copy ───────────────────────────────────────────────────────────────────
+
+    private async void CopySelected_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedPaths = _folders.Where(f => f.IsSelected).Select(f => f.Path).ToList();
+        if (selectedPaths.Count == 0 || string.IsNullOrEmpty(_destPath)) return;
+
+        _copying           = true;
+        _cts               = new CancellationTokenSource();
+        CopyBtn.IsEnabled  = false;
+        CancelBtn.Content  = "Stop";
+        ProgressPanel.Visibility = Visibility.Visible;
+        CopyProgressBar.Value    = 0;
+        ProgressLabel.Text       = "Starting…";
+        ProgressPctText.Text     = "0%";
+
+        var progress = new Progress<CopyProgress>(p =>
+        {
+            double pct = p.TotalFiles == 0 ? 0 : 100.0 * p.FilesCopied / p.TotalFiles;
+            CopyProgressBar.Value  = pct;
+            ProgressPctText.Text   = $"{pct:F0}%";
+            ProgressLabel.Text     = $"{p.FilesCopied:N0} / {p.TotalFiles:N0} files  ·  "
+                                   + $"{FormatSize(p.BytesCopied)} / {FormatSize(p.TotalBytes)}";
+            CurrentFileText.Text   = p.CurrentFile;
+        });
+
+        try
+        {
+            bool skipExisting = SkipExistingCheck.IsChecked == true;
+            await MtpDeviceService.CopyFoldersAsync(
+                _deviceId, selectedPaths, _destPath, skipExisting, progress, _cts.Token);
+
+            ProgressLabel.Text    = "✅ Copy complete!";
+            ProgressPctText.Text  = "Done";
+            CurrentFileText.Text  = string.Empty;
+            CopyProgressBar.Value = 100;
+            SummaryText.Text      = "Copy finished successfully";
+        }
+        catch (OperationCanceledException)
+        {
+            ProgressLabel.Text   = "⏹ Stopped by user";
+            ProgressPctText.Text = string.Empty;
+            SummaryText.Text     = "Copy cancelled";
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Copy failed:\n{ex.Message}",
+                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            ProgressLabel.Text = "❌ Error — copy incomplete";
+        }
+        finally
+        {
+            _copying          = false;
+            CancelBtn.Content = "Close";
+            RefreshCopyBtn();
+        }
+    }
+
+    private void Cancel_Click(object sender, RoutedEventArgs e)
+    {
+        if (_copying)
+        {
+            _cts?.Cancel();
+        }
+        else
+        {
+            Close();
+        }
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (_copying)
+        {
+            var result = System.Windows.MessageBox.Show(
+                "A copy is in progress. Stop it and close?",
+                "Close",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (result == MessageBoxResult.No)
+            {
+                e.Cancel = true;
+                return;
+            }
+            _cts?.Cancel();
+        }
+        base.OnClosing(e);
+    }
+}

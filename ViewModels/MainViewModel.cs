@@ -189,6 +189,13 @@ public class MainViewModel : INotifyPropertyChanged
         private set { _isMtpSource = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasFolder)); }
     }
 
+    /// <summary>The WPD device ID of the currently loaded MTP source. Null if not MTP.</summary>
+    public string? MtpDeviceId   => _mtpDeviceId;
+    /// <summary>The friendly name of the device (e.g. "iPhone").</summary>
+    public string? MtpDeviceName => _isMtpSource ? _mtpDeviceName : null;
+    /// <summary>The MTP folder path currently being browsed (same as FolderPath for MTP).</summary>
+    public string? MtpFolderPath => _isMtpSource ? FolderPath : null;
+
     // ── Buckets ────────────────────────────────────────────────────────────────
 
     public ObservableCollection<ReviewBucket> Buckets { get; } = [];

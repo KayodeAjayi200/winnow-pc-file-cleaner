@@ -76,7 +76,7 @@ public partial class CardStackControl : System.Windows.Controls.UserControl
             case Key.B:     VM.AddToNewBucket(); SoundService.Instance.PlayBucket(); break;
             case Key.O:
                 if (VM?.CurrentFile is { } f)
-                    FilePreviewControl.OpenInDefaultApp(f.FullPath);
+                    FilePreviewControl.OpenInDefaultApp(f);
                 break;
             case Key.L:
                 if (VM?.CurrentFile is { } fLoc)
@@ -89,7 +89,7 @@ public partial class CardStackControl : System.Windows.Controls.UserControl
     {
         if (VM?.CurrentFile is { } file)
         {
-            FilePreviewControl.OpenInDefaultApp(file.FullPath);
+            FilePreviewControl.OpenInDefaultApp(file);
             Focus();
         }
     }

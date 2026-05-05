@@ -143,6 +143,17 @@ public partial class MainWindow : Window
         CardStack.Focus();
     }
 
+    private void BackupDeviceButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vm.MtpDeviceId == null || _vm.MtpFolderPath == null) return;
+        var win = new Views.MtpCopyWindow(_vm.MtpDeviceId, _vm.MtpDeviceName ?? "Device",
+                                          _vm.MtpFolderPath)
+        {
+            Owner = this
+        };
+        win.Show();
+    }
+
     private void SubfolderPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         _vm.IncludeSubfolders = !_vm.IncludeSubfolders;

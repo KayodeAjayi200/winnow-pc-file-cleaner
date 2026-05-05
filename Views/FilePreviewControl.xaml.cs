@@ -62,6 +62,47 @@ public partial class FilePreviewControl : UserControl
         }
     }
 
+    /// <summary>
+    /// Opens the file in its default app.
+    /// For MTP files, downloads to temp first.
+    /// </summary>
+    public static async void OpenInDefaultApp(FileItem file)
+    {
+        if (!file.IsMtp)
+        {
+            OpenInDefaultApp(file.FullPath);
+            return;
+        }
+
+        if (file.MtpDeviceId == null) return;
+
+        try
+        {
+            var tempPath = await FileTinder.Services.MtpDeviceService.RunSta(() =>
+                FileTinder.Services.MtpDeviceService.DownloadToTemp(file.MtpDeviceId, file.FullPath));
+
+            if (tempPath == null)
+            {
+                System.Windows.MessageBox.Show(
+                    "Could not download the file from the device.",
+                    "Open failed",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Could not open file:\n{ex.Message}",
+                "Open failed",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+        }
+    }
+
     /// Opens Windows Explorer with the file pre-selected (local files only).
     public static void OpenFileLocation(FileItem file)
     {
