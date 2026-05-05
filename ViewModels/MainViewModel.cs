@@ -131,7 +131,9 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public string ScanStatusText => IsScanning
-        ? $"Scanning… {ScanCount} found"
+        ? _filteredTotalSize > 0
+            ? $"Scanning… {ScanCount} found · {FormatBytes(_filteredTotalSize)}"
+            : $"Scanning… {ScanCount} found"
         : string.Empty;
 
     // ── Stats ──────────────────────────────────────────────────────────────────
@@ -453,6 +455,7 @@ public class MainViewModel : INotifyPropertyChanged
         SortFiles();
 
         _filteredTotalSize = _allFiles.Sum(f => f.Size);
+        OnPropertyChanged(nameof(ScanStatusText));   // re-fire after size is known
         OnPropertyChanged(nameof(QueueInfo));
         OnPropertyChanged(nameof(Progress));
         OnPropertyChanged(nameof(IsComplete));
