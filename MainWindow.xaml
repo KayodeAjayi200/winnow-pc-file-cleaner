@@ -44,8 +44,18 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Sound controls -->
+                <!-- Sound + shortcuts controls -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <!-- Shortcuts overlay button -->
+                    <Button x:Name="ShortcutsButton"
+                            Background="Transparent" BorderThickness="0"
+                            Cursor="Hand" Padding="6,2" Margin="0,0,4,0"
+                            ToolTip="Keyboard shortcuts (?)"
+                            AutomationProperties.Name="Show keyboard shortcuts"
+                            Click="ShortcutsButton_Click">
+                        <TextBlock Text="?" FontSize="15" FontWeight="Bold"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Button>
                     <Button x:Name="MuteButton"
                             Background="Transparent" BorderThickness="0"
                             Cursor="Hand" Padding="6,2"
@@ -77,6 +87,7 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
@@ -134,6 +145,32 @@
                         Visibility="{Binding HasFolder, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="↺ Reload"/>
                 </Button>
+
+                <!-- Folder presets dropdown -->
+                <Button Grid.Column="5"
+                        x:Name="PresetsButton"
+                        Style="{StaticResource BaseButtonStyle}"
+                        Click="PresetsButton_Click"
+                        Margin="6,0,0,0"
+                        ToolTip="Pinned folders — quick access"
+                        AutomationProperties.Name="Pinned folders">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="📌" FontSize="13" Margin="0,0,5,0"/>
+                        <TextBlock Text="Presets"/>
+                    </StackPanel>
+                </Button>
+                <Popup x:Name="PresetsPopup"
+                       PlacementTarget="{Binding ElementName=PresetsButton}"
+                       Placement="Bottom"
+                       StaysOpen="False">
+                    <Border Background="{StaticResource BgSurfaceBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1" CornerRadius="8" Padding="6" MinWidth="200">
+                        <StackPanel x:Name="PresetsStack">
+                            <!-- Filled from code-behind -->
+                        </StackPanel>
+                    </Border>
+                </Popup>
             </Grid>
         </Border>
 
@@ -162,6 +199,15 @@
                     <ComboBox x:Name="DateFilterCombo"
                               Style="{StaticResource FilterComboStyle}"
                               SelectionChanged="DateFilterCombo_SelectionChanged"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <TextBlock Text="Sort:" FontSize="13"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="SortCombo"
+                              Style="{StaticResource FilterComboStyle}"
+                              SelectionChanged="SortCombo_SelectionChanged"/>
                 </StackPanel>
 
                 <!-- Subfolders toggle pill -->
@@ -276,6 +322,22 @@
                       Visibility="{Binding HasCurrentFile, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
 
+                        <!-- UNDO button -->
+                        <StackPanel HorizontalAlignment="Center" Margin="0,0,20,0"
+                                    Visibility="{Binding CanUndo, Converter={StaticResource BoolToVis}}">
+                            <Button Style="{StaticResource BaseButtonStyle}"
+                                    Command="{Binding UndoCommand}"
+                                    ToolTip="Undo last delete (Ctrl+Z)"
+                                    AutomationProperties.Name="Undo last delete"
+                                    Padding="10,10"
+                                    Margin="0,0,0,6">
+                                <TextBlock Text="↩" FontSize="18"/>
+                            </Button>
+                            <TextBlock Text="Undo" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+
                         <!-- DELETE button -->
                         <StackPanel HorizontalAlignment="Center" Margin="0,0,20,0">
                             <Button Style="{StaticResource DeleteButtonStyle}"
@@ -324,6 +386,36 @@
 
             <!-- ── Right: Stats + Buckets panel ── -->
             <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Top">
+
+                <!-- Recently Deleted toggle button -->
+                <Grid Margin="0,0,0,10"
+                      Visibility="{Binding HasDeletedEntries, Converter={StaticResource BoolToVis}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="RECENTLY DELETED"
+                               FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"/>
+                    <Button Grid.Column="1"
+                            Command="{Binding ToggleDeletedPanelCommand}"
+                            Background="Transparent" BorderThickness="0"
+                            Cursor="Hand" Padding="4,2"
+                            ToolTip="Show/hide deleted files panel"
+                            AutomationProperties.Name="Toggle deleted files panel">
+                        <Border Background="#1AFF6B6B" CornerRadius="10" Padding="6,2">
+                            <TextBlock Text="{Binding DeletedEntries.Count}"
+                                       FontSize="11" FontWeight="Bold"
+                                       Foreground="#FF6B6B"/>
+                        </Border>
+                    </Button>
+                </Grid>
+
+                <!-- Deleted files panel -->
+                <views:DeletedFilesPanel DataContext="{Binding}"
+                                         Visibility="{Binding ShowDeletedPanel, Converter={StaticResource BoolToVis}}"
+                                         Margin="0,0,0,14"/>
 
                 <TextBlock Text="SESSION STATS"
                            FontSize="11" FontWeight="SemiBold"

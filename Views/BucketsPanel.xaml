@@ -6,25 +6,38 @@
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisInv" Invert="True"/>
+        <conv:StringToColorConverter x:Key="StrToBrush"/>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="420">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="480">
         <ItemsControl x:Name="BucketList">
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
                     <Border Background="{StaticResource BgSurfaceBrush}"
-                            BorderBrush="{StaticResource BorderSubtleBrush}"
                             BorderThickness="1"
-                            CornerRadius="10"
-                            Margin="0,0,0,8"
-                            Padding="0">
+                            CornerRadius="12"
+                            Margin="0,0,0,10"
+                            Padding="0"
+                            ClipToBounds="True">
+                        <Border.BorderBrush>
+                            <SolidColorBrush Color="{Binding AccentColor, Converter={StaticResource StrToBrush}}"/>
+                        </Border.BorderBrush>
+
                         <StackPanel>
 
-                            <!-- Bucket header -->
-                            <Grid Margin="14,10,10,10">
+                            <!-- Accent header strip -->
+                            <Border Height="5" CornerRadius="10,10,0,0">
+                                <Border.Background>
+                                    <SolidColorBrush Color="{Binding AccentColor, Converter={StaticResource StrToBrush}}"/>
+                                </Border.Background>
+                            </Border>
+
+                            <!-- Bucket header row -->
+                            <Grid Margin="12,8,8,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -46,12 +59,24 @@
                                     <TextBlock Text="{Binding Name}"
                                                FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextPrimaryBrush}"/>
-                                    <TextBlock Text="{Binding Summary}"
-                                               FontSize="11"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border CornerRadius="8" Padding="5,1" Margin="0,2,6,0"
+                                                Background="#22FFFFFF">
+                                            <TextBlock Text="{Binding Summary}"
+                                                       FontSize="10" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding DestinationLabel}"
+                                                   FontSize="10"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="100"
+                                                   ToolTip="{Binding DestinationPath}"/>
+                                    </StackPanel>
                                 </StackPanel>
 
-                                <!-- RENAME MODE: TextBox + confirm/cancel -->
+                                <!-- RENAME MODE -->
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
                                             Visibility="{Binding IsRenaming, Converter={StaticResource BoolToVis}}">
                                     <Border Background="{StaticResource BgCardBrush}"
@@ -92,29 +117,41 @@
                                         Command="{Binding RenameCommand}"
                                         Visibility="{Binding IsRenaming, Converter={StaticResource BoolToVisInv}}"
                                         Background="Transparent" BorderThickness="0"
-                                        Cursor="Hand" Padding="6,4"
+                                        Cursor="Hand" Padding="5,4"
                                         ToolTip="Rename bucket"
                                         AutomationProperties.Name="Rename bucket">
-                                    <TextBlock Text="✏" FontSize="12"
+                                    <TextBlock Text="✏" FontSize="11"
                                                Foreground="{StaticResource TextMutedBrush}"/>
                                 </Button>
 
-                                <!-- Convert to subfolder -->
+                                <!-- Set destination folder -->
                                 <Button Grid.Column="3"
-                                        Command="{Binding ConvertToSubfolderCommand}"
+                                        Command="{Binding SetDestinationCommand}"
                                         Visibility="{Binding IsRenaming, Converter={StaticResource BoolToVisInv}}"
                                         Background="Transparent" BorderThickness="0"
-                                        Cursor="Hand" Padding="6,4"
-                                        ToolTip="Move files into a new subfolder with this bucket's name"
-                                        AutomationProperties.Name="Convert bucket to subfolder">
-                                    <TextBlock Text="📂" FontSize="13"/>
+                                        Cursor="Hand" Padding="5,4"
+                                        ToolTip="Set destination folder"
+                                        AutomationProperties.Name="Set destination folder">
+                                    <TextBlock Text="📁" FontSize="13"/>
+                                </Button>
+
+                                <!-- Apply (move files) -->
+                                <Button Grid.Column="4"
+                                        Command="{Binding ApplyBucketCommand}"
+                                        Visibility="{Binding IsRenaming, Converter={StaticResource BoolToVisInv}}"
+                                        Background="Transparent" BorderThickness="0"
+                                        Cursor="Hand" Padding="5,4"
+                                        ToolTip="Apply — move all files to destination (or create subfolder)"
+                                        AutomationProperties.Name="Apply bucket">
+                                    <TextBlock Text="▶" FontSize="13"
+                                               Foreground="{StaticResource AccentKeepBrush}"/>
                                 </Button>
 
                                 <!-- Delete whole bucket -->
-                                <Button Grid.Column="4"
+                                <Button Grid.Column="5"
                                         Command="{Binding DeleteBucketCommand}"
                                         Background="Transparent" BorderThickness="0"
-                                        Cursor="Hand" Padding="6,4"
+                                        Cursor="Hand" Padding="5,4"
                                         ToolTip="Delete all files in bucket"
                                         AutomationProperties.Name="Delete all files in bucket">
                                     <TextBlock Text="🗑" FontSize="13"
@@ -155,7 +192,6 @@
                                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                                 </StackPanel>
 
-                                                <!-- Keep file -->
                                                 <Button Grid.Column="2"
                                                         Command="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ItemsControl}}, Path=DataContext.KeepFileCommand}"
                                                         CommandParameter="{Binding}"
@@ -166,7 +202,6 @@
                                                     <TextBlock Text="✅" FontSize="12"/>
                                                 </Button>
 
-                                                <!-- Delete file -->
                                                 <Button Grid.Column="3"
                                                         Command="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ItemsControl}}, Path=DataContext.DeleteFileCommand}"
                                                         CommandParameter="{Binding}"
@@ -178,13 +213,12 @@
                                                                Foreground="{StaticResource AccentDeleteBrush}"/>
                                                 </Button>
 
-                                                <!-- Remove from bucket (without action) -->
                                                 <Button Grid.Column="4"
                                                         Command="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ItemsControl}}, Path=DataContext.RemoveFileCommand}"
                                                         CommandParameter="{Binding}"
                                                         Background="Transparent" BorderThickness="0"
                                                         Cursor="Hand" Padding="4,2"
-                                                        ToolTip="Remove from bucket (undecided)"
+                                                        ToolTip="Remove from bucket"
                                                         AutomationProperties.Name="Remove from bucket">
                                                     <TextBlock Text="✕" FontSize="11"
                                                                Foreground="{StaticResource TextMutedBrush}"/>
@@ -202,3 +236,4 @@
         </ItemsControl>
     </ScrollViewer>
 </UserControl>
+

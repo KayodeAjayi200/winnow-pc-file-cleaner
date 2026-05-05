@@ -98,9 +98,49 @@ public static class FileScanner
             FullPath     = info.FullName,
             Size         = info.Length,
             LastModified = info.LastWriteTime,
+            LastAccessed = info.LastAccessTime,
+            JunkScore    = CalculateJunkScore(info),
             Category     = ClassifyExtension(info.Extension)
         };
     }
+
+    public static int CalculateJunkScore(FileInfo info)
+    {
+        int score = 0;
+
+        // Old files: 1-2 years → +20, >2 years → +40
+        var age = DateTime.Now - info.LastWriteTime;
+        if (age.TotalDays > 730) score += 40;
+        else if (age.TotalDays > 365) score += 20;
+
+        // Temp / junk extensions
+        var ext = info.Extension.ToLowerInvariant();
+        if (_junkExtensions.Contains(ext)) score += 30;
+
+        // Known junk filenames (case-insensitive)
+        var nameNoExt = Path.GetFileNameWithoutExtension(info.Name).ToLowerInvariant();
+        if (_junkNames.Contains(nameNoExt)) score += 30;
+
+        // Duplicate-like name patterns: "file (1)", "copy of file", "file - copy"
+        if (_dupPattern.IsMatch(nameNoExt)) score += 15;
+
+        return Math.Min(score, 100);
+    }
+
+    private static readonly HashSet<string> _junkExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".tmp", ".bak", ".old", ".cache", ".dmp", ".log", ".crdownload", ".part"
+    };
+
+    private static readonly HashSet<string> _junkNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "thumbs.db", ".ds_store", "desktop.ini", "ehthumbs.db", "ehthumbs_vista.db",
+        "$recycle.bin", "ntuser.dat.log"
+    };
+
+    private static readonly System.Text.RegularExpressions.Regex _dupPattern = new(
+        @"[\s_-]\(\d+\)$|[\s_-]copy(\s+\d+)?$|\bcopy\s+of\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     public static FileTypeCategory ClassifyExtension(string extension)
     {

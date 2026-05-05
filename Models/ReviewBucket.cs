@@ -12,6 +12,8 @@ public class ReviewBucket : INotifyPropertyChanged
     private bool   _isExpanded;
     private bool   _isRenaming;
     private string _pendingName = string.Empty;
+    private string? _destinationPath;
+    private string _accentColor = "#7C3AED"; // default purple
 
     public string Id { get; } = Guid.NewGuid().ToString("N")[..8];
 
@@ -39,6 +41,21 @@ public class ReviewBucket : INotifyPropertyChanged
         set { _pendingName = value; OnPropertyChanged(); }
     }
 
+    public string? DestinationPath
+    {
+        get => _destinationPath;
+        set { _destinationPath = value; OnPropertyChanged(); OnPropertyChanged(nameof(DestinationLabel)); OnPropertyChanged(nameof(HasDestination)); }
+    }
+
+    public string AccentColor
+    {
+        get => _accentColor;
+        set { _accentColor = value; OnPropertyChanged(); }
+    }
+
+    public bool   HasDestination   => !string.IsNullOrEmpty(_destinationPath);
+    public string DestinationLabel => _destinationPath ?? "No destination set";
+
     public ObservableCollection<FileItem> Files { get; } = [];
 
     // ── Callbacks wired by MainViewModel ─────────────────────────────────────
@@ -47,6 +64,8 @@ public class ReviewBucket : INotifyPropertyChanged
     public Action<ReviewBucket, FileItem>? OnKeepFile          { get; set; }
     public Action<ReviewBucket>?           OnDeleteBucket      { get; set; }
     public Action<ReviewBucket>?           OnConvertToSubfolder { get; set; }
+    public Action<ReviewBucket>?           OnApplyBucket       { get; set; }
+    public Action<ReviewBucket>?           OnSetDestination    { get; set; }
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
@@ -59,6 +78,8 @@ public class ReviewBucket : INotifyPropertyChanged
     public ICommand CommitRenameCommand        { get; }
     public ICommand CancelRenameCommand        { get; }
     public ICommand ConvertToSubfolderCommand  { get; }
+    public ICommand ApplyBucketCommand         { get; }
+    public ICommand SetDestinationCommand      { get; }
 
     public ReviewBucket(string name)
     {
@@ -77,6 +98,8 @@ public class ReviewBucket : INotifyPropertyChanged
         });
         CancelRenameCommand       = new RelayCommand(() => IsRenaming = false);
         ConvertToSubfolderCommand = new RelayCommand(() => OnConvertToSubfolder?.Invoke(this));
+        ApplyBucketCommand        = new RelayCommand(() => OnApplyBucket?.Invoke(this));
+        SetDestinationCommand     = new RelayCommand(() => OnSetDestination?.Invoke(this));
 
         Files.CollectionChanged += (_, _) =>
         {

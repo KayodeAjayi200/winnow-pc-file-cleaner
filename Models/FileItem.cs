@@ -8,7 +8,9 @@ public class FileItem : INotifyPropertyChanged
     public string Name         { get; init; } = string.Empty;
     public string FullPath     { get; init; } = string.Empty;
     public long   Size         { get; init; }
-    public DateTime LastModified { get; init; }
+    public DateTime LastModified  { get; init; }
+    public DateTime LastAccessed  { get; init; }
+    public int    JunkScore    { get; init; }   // 0–100; higher = more likely junk
     public FileTypeCategory Category { get; init; }
 
     // ── MTP (portable device) fields ──────────────────────────────────────────

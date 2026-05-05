@@ -22,10 +22,17 @@ public class MainViewModel : INotifyPropertyChanged
     private DispatcherTimer?         _scanTimer;
     private DispatcherTimer?         _bannerTimer;
 
+    // Undo stack (local files only — MTP deletes are permanent)
+    private readonly Stack<DeletedEntry> _undoStack = new();
+    private const int MaxUndoDepth = 10;
+
     // MTP state
     private string? _mtpDeviceId;
     private string  _mtpDeviceName = string.Empty;
     private bool    _mtpPermanentDeleteWarningShown;
+
+    // Presets
+    private readonly FolderPresetsService _presetsService = new();
 
     // ── Bindable properties ────────────────────────────────────────────────────
 
@@ -41,6 +48,13 @@ public class MainViewModel : INotifyPropertyChanged
     {
         get => _includeSubfolders;
         set { _includeSubfolders = value; OnPropertyChanged(); if (HasFolder) LoadFiles(); }
+    }
+
+    private SortMode _selectedSortMode = SortMode.LargestFirst;
+    public SortMode SelectedSortMode
+    {
+        get => _selectedSortMode;
+        set { _selectedSortMode = value; OnPropertyChanged(); if (HasFolder) LoadFiles(); }
     }
 
     private FileTypeCategory _selectedTypeFilter = FileTypeCategory.All;
@@ -180,6 +194,50 @@ public class MainViewModel : INotifyPropertyChanged
         || (!string.IsNullOrWhiteSpace(FolderPath) && Directory.Exists(FolderPath));
     public bool IsComplete     => _allFiles.Count > 0 && _currentIndex >= _allFiles.Count;
 
+    // ── Undo ───────────────────────────────────────────────────────────────────
+
+    public bool CanUndo => _undoStack.Count > 0 && !IsMtpSource;
+
+    // ── Recently deleted ────────────────────────────────────────────────────────
+
+    public ObservableCollection<DeletedEntry> DeletedEntries { get; } = [];
+    public bool HasDeletedEntries => DeletedEntries.Count > 0;
+
+    private bool _showDeletedPanel;
+    public bool ShowDeletedPanel
+    {
+        get => _showDeletedPanel;
+        set { _showDeletedPanel = value; OnPropertyChanged(); }
+    }
+
+    // ── Recycle Bin size ───────────────────────────────────────────────────────
+
+    private long _recycleBinSize;
+    public long RecycleBinSize
+    {
+        get => _recycleBinSize;
+        private set { _recycleBinSize = value; OnPropertyChanged(); OnPropertyChanged(nameof(RecycleBinSizeFormatted)); OnPropertyChanged(nameof(HasBinContent)); }
+    }
+
+    public string RecycleBinSizeFormatted => FormatBytes(_recycleBinSize);
+    public bool   HasBinContent           => _recycleBinSize > 0;
+
+    // ── Folder presets ─────────────────────────────────────────────────────────
+
+    public ObservableCollection<FolderPreset> Presets { get; } = [];
+
+    // ── Sort options ───────────────────────────────────────────────────────────
+
+    public IReadOnlyList<(SortMode Value, string Label)> SortModes { get; } =
+    [
+        (SortMode.LargestFirst,     "Largest first"),
+        (SortMode.SmallestFirst,    "Smallest first"),
+        (SortMode.NewestFirst,      "Newest first"),
+        (SortMode.OldestFirst,      "Oldest first"),
+        (SortMode.LastAccessedFirst,"Last accessed"),
+        (SortMode.JunkScoreFirst,   "🗑 Junk score"),
+    ];
+
     // ── MTP properties ─────────────────────────────────────────────────────────
 
     private bool _isMtpSource;
@@ -226,27 +284,43 @@ public class MainViewModel : INotifyPropertyChanged
 
     // ── Commands ───────────────────────────────────────────────────────────────
 
-    public ICommand BrowseFolderCommand   { get; }
-    public ICommand KeepCommand           { get; }
-    public ICommand DeleteCommand         { get; }
-    public ICommand ReloadCommand         { get; }
-    public ICommand ResetStatsCommand     { get; }
-    public ICommand StartFreshCommand     { get; }
-    public ICommand AddToNewBucketCommand { get; }
-    public ICommand AddToBucketCommand    { get; }
+    public ICommand BrowseFolderCommand      { get; }
+    public ICommand KeepCommand              { get; }
+    public ICommand DeleteCommand            { get; }
+    public ICommand ReloadCommand            { get; }
+    public ICommand ResetStatsCommand        { get; }
+    public ICommand StartFreshCommand        { get; }
+    public ICommand AddToNewBucketCommand    { get; }
+    public ICommand AddToBucketCommand       { get; }
+    public ICommand UndoCommand              { get; }
+    public ICommand EmptyRecycleBinCommand   { get; }
+    public ICommand ToggleDeletedPanelCommand { get; }
+    public ICommand RestoreDeletedCommand    { get; }
 
     public MainViewModel()
     {
-        BrowseFolderCommand   = new RelayCommand(BrowseFolder);
-        KeepCommand           = new RelayCommand(Keep,   () => HasCurrentFile);
-        DeleteCommand         = new RelayCommand(Delete, () => HasCurrentFile);
-        ReloadCommand         = new RelayCommand(LoadFiles, () => HasFolder);
-        ResetStatsCommand     = new RelayCommand(ResetStats);
-        StartFreshCommand     = new RelayCommand(StartFresh, () => HasFolder);
-        AddToNewBucketCommand = new RelayCommand(AddToNewBucket, () => HasCurrentFile);
-        AddToBucketCommand    = new RelayCommand<ReviewBucket>(AddToExistingBucket, b => b != null && HasCurrentFile);
+        BrowseFolderCommand       = new RelayCommand(BrowseFolder);
+        KeepCommand               = new RelayCommand(Keep,   () => HasCurrentFile);
+        DeleteCommand             = new RelayCommand(Delete, () => HasCurrentFile);
+        ReloadCommand             = new RelayCommand(LoadFiles, () => HasFolder);
+        ResetStatsCommand         = new RelayCommand(ResetStats);
+        StartFreshCommand         = new RelayCommand(StartFresh, () => HasFolder);
+        AddToNewBucketCommand     = new RelayCommand(AddToNewBucket, () => HasCurrentFile);
+        AddToBucketCommand        = new RelayCommand<ReviewBucket>(AddToExistingBucket, b => b != null && HasCurrentFile);
+        UndoCommand               = new RelayCommand(Undo, () => CanUndo);
+        EmptyRecycleBinCommand    = new RelayCommand(EmptyRecycleBin, () => HasBinContent);
+        ToggleDeletedPanelCommand = new RelayCommand(() => ShowDeletedPanel = !ShowDeletedPanel);
+        RestoreDeletedCommand     = new RelayCommand<DeletedEntry>(RestoreDeletedEntry);
+
+        // Load presets
+        foreach (var p in _presetsService.Load())
+            Presets.Add(p);
+
+        // Check recycle bin size
+        RefreshRecycleBinSize();
 
         Buckets.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasBuckets));
+        DeletedEntries.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasDeletedEntries));
     }
 
     // ── Actions ────────────────────────────────────────────────────────────────
@@ -375,8 +449,8 @@ public class MainViewModel : INotifyPropertyChanged
         _allFiles.AddRange(batch);
         ScanCount = _allFiles.Count;
 
-        // Sort descending by size — fast even for 100k files
-        _allFiles.Sort((a, b) => b.Size.CompareTo(a.Size));
+        // Sort by selected sort mode
+        SortFiles();
 
         _filteredTotalSize = _allFiles.Sum(f => f.Size);
         OnPropertyChanged(nameof(QueueInfo));
@@ -435,10 +509,133 @@ public class MainViewModel : INotifyPropertyChanged
                 SpaceFreed += file.Size;
                 _filteredTotalSize = Math.Max(0, _filteredTotalSize - file.Size);
                 OnPropertyChanged(nameof(FilteredTotalSizeFormatted));
+
+                // Track for undo and recently deleted panel
+                var entry = new DeletedEntry { File = file, DeletedAt = DateTime.Now };
+                if (_undoStack.Count >= MaxUndoDepth) { /* pop oldest — Stack doesn't support it, use a list */ }
+                PushUndo(entry);
+                DeletedEntries.Insert(0, entry);
             }
         }
         Advance();
         SaveSession();
+        RefreshRecycleBinSize();
+    }
+
+    private void PushUndo(DeletedEntry entry)
+    {
+        var list = _undoStack.ToList();
+        list.Insert(0, entry);
+        if (list.Count > MaxUndoDepth) list.RemoveAt(list.Count - 1);
+        _undoStack.Clear();
+        foreach (var e in list.AsEnumerable().Reverse()) _undoStack.Push(e);
+        OnPropertyChanged(nameof(CanUndo));
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+    }
+
+    public void Undo()
+    {
+        if (!CanUndo) return;
+        var entry = _undoStack.Pop();
+        OnPropertyChanged(nameof(CanUndo));
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+
+        bool restored = RecycleBinService.RestoreFromRecycleBin(entry.File.FullPath);
+        if (restored)
+        {
+            FilesDeleted  = Math.Max(0, FilesDeleted - 1);
+            SpaceFreed    = Math.Max(0, SpaceFreed - entry.File.Size);
+            _filteredTotalSize += entry.File.Size;
+            OnPropertyChanged(nameof(FilteredTotalSizeFormatted));
+
+            // Re-insert the file at the current position so it shows up again
+            if (_currentIndex > 0) _currentIndex--;
+            _allFiles.Insert(_currentIndex, entry.File);
+            FilesReviewed = Math.Max(0, FilesReviewed - 1);
+            RefreshCurrentCards();
+            OnPropertyChanged(nameof(IsComplete));
+            DeletedEntries.Remove(entry);
+            SaveSession();
+            RefreshRecycleBinSize();
+            ShowBanner($"↩  Restored: {entry.File.Name}");
+        }
+        else
+        {
+            ShowBanner($"⚠  Could not restore {entry.File.Name} — it may have already been emptied.");
+        }
+    }
+
+    private void RestoreDeletedEntry(DeletedEntry? entry)
+    {
+        if (entry == null) return;
+        bool restored = RecycleBinService.RestoreFromRecycleBin(entry.File.FullPath);
+        if (restored)
+        {
+            DeletedEntries.Remove(entry);
+            // Remove from undo stack too
+            var list = _undoStack.Where(e => e != entry).ToList();
+            _undoStack.Clear();
+            foreach (var e in list) _undoStack.Push(e);
+            OnPropertyChanged(nameof(CanUndo));
+            System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+            RefreshRecycleBinSize();
+            ShowBanner($"↩  Restored: {entry.File.Name}");
+        }
+        else
+        {
+            ShowBanner($"⚠  Could not restore {entry.File.Name}.");
+        }
+    }
+
+    private void EmptyRecycleBin()
+    {
+        var result = System.Windows.MessageBox.Show(
+            $"Empty the Recycle Bin ({RecycleBinSizeFormatted})?\n\nThis permanently deletes all files in the Recycle Bin.",
+            "Empty Recycle Bin",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning);
+
+        if (result != System.Windows.MessageBoxResult.Yes) return;
+
+        RecycleBinService.EmptyRecycleBin();
+        _undoStack.Clear();
+        DeletedEntries.Clear();
+        OnPropertyChanged(nameof(CanUndo));
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+        RefreshRecycleBinSize();
+        ShowBanner("🗑  Recycle Bin emptied");
+    }
+
+    private void RefreshRecycleBinSize()
+    {
+        RecycleBinSize = RecycleBinService.GetRecycleBinSize();
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+    }
+
+    public void PinCurrentFolder()
+    {
+        if (string.IsNullOrEmpty(FolderPath)) return;
+        _presetsService.AddPreset([.. Presets], FolderPath);
+        // Reload
+        var updated = _presetsService.Load();
+        Presets.Clear();
+        foreach (var p in updated) Presets.Add(p);
+    }
+
+    public void RemovePreset(FolderPreset preset)
+    {
+        var list = Presets.ToList();
+        _presetsService.RemovePreset(list, preset);
+        Presets.Remove(preset);
+    }
+
+    public void LoadPreset(FolderPreset preset)
+    {
+        if (!Directory.Exists(preset.Path)) return;
+        _mtpDeviceId = null;
+        IsMtpSource  = false;
+        FolderPath   = preset.Path;
+        LoadFiles();
     }
 
     public void AddToNewBucket(string name)
@@ -459,7 +656,12 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ReviewBucket CreateBucket(string name)
     {
-        var bucket = new ReviewBucket(name);
+        // Assign a rotating accent colour
+        var accentColors = new[] { "#7C3AED", "#DB2777", "#0EA5E9", "#16A34A", "#EA580C", "#D97706" };
+        var bucket = new ReviewBucket(name)
+        {
+            AccentColor = accentColors[Buckets.Count % accentColors.Length]
+        };
 
         bucket.OnDeleteFile = (b, f) =>
         {
@@ -494,34 +696,56 @@ public class MainViewModel : INotifyPropertyChanged
             Buckets.Remove(b);
         };
 
-        bucket.OnConvertToSubfolder = b =>
+        bucket.OnConvertToSubfolder = b => ApplyBucketToFolder(b, null);
+        bucket.OnApplyBucket        = b => ApplyBucketToFolder(b, b.DestinationPath);
+
+        bucket.OnSetDestination = b =>
         {
-            if (string.IsNullOrEmpty(FolderPath)) return;
-            var safeName = SanitizeFolderName(b.Name);
-            if (string.IsNullOrEmpty(safeName)) return;
-            var destDir = Path.Combine(FolderPath, safeName);
-            try
+            using var dialog = new FolderBrowserDialog
             {
-                Directory.CreateDirectory(destDir);
-                foreach (var f in b.Files.ToList())
-                {
-                    var destFile = GetUniqueFilePath(Path.Combine(destDir, Path.GetFileName(f.FullPath)));
-                    File.Move(f.FullPath, destFile);
-                    b.Files.Remove(f);
-                }
-                Buckets.Remove(b);
-            }
-            catch (Exception ex)
-            {
-                System.Windows.MessageBox.Show(
-                    $"Could not convert bucket to subfolder:\n{ex.Message}",
-                    "FileTinder", System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Warning);
-            }
+                Description            = "Choose destination folder for this bucket",
+                UseDescriptionForTitle = true,
+                ShowNewFolderButton    = true,
+                SelectedPath           = b.DestinationPath ?? FolderPath ?? string.Empty,
+            };
+            if (dialog.ShowDialog() == DialogResult.OK)
+                b.DestinationPath = dialog.SelectedPath;
         };
 
         Buckets.Add(bucket);
         return bucket;
+    }
+
+    private void ApplyBucketToFolder(ReviewBucket b, string? destPath)
+    {
+        // If no explicit dest, create a subfolder named after the bucket
+        if (string.IsNullOrEmpty(destPath))
+        {
+            if (string.IsNullOrEmpty(FolderPath)) return;
+            var safeName = SanitizeFolderName(b.Name);
+            if (string.IsNullOrEmpty(safeName)) return;
+            destPath = Path.Combine(FolderPath, safeName);
+        }
+
+        try
+        {
+            Directory.CreateDirectory(destPath);
+            foreach (var f in b.Files.ToList())
+            {
+                if (f.IsMtp) continue; // can't move MTP files this way
+                var destFile = GetUniqueFilePath(Path.Combine(destPath, Path.GetFileName(f.FullPath)));
+                File.Move(f.FullPath, destFile);
+                b.Files.Remove(f);
+            }
+            if (b.Files.Count == 0) Buckets.Remove(b);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Could not move files:\n{ex.Message}",
+                "Winnow", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+        }
     }
 
     public void AddToExistingBucket(ReviewBucket? bucket)
@@ -621,6 +845,29 @@ public class MainViewModel : INotifyPropertyChanged
         FilesDeleted  = 0;
         SpaceFreed    = 0;
         FilesBucketed = 0;
+        _undoStack.Clear();
+        DeletedEntries.Clear();
+        OnPropertyChanged(nameof(CanUndo));
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void SortFiles()
+    {
+        switch (_selectedSortMode)
+        {
+            case SortMode.LargestFirst:
+                _allFiles.Sort((a, b) => b.Size.CompareTo(a.Size)); break;
+            case SortMode.SmallestFirst:
+                _allFiles.Sort((a, b) => a.Size.CompareTo(b.Size)); break;
+            case SortMode.NewestFirst:
+                _allFiles.Sort((a, b) => b.LastModified.CompareTo(a.LastModified)); break;
+            case SortMode.OldestFirst:
+                _allFiles.Sort((a, b) => a.LastModified.CompareTo(b.LastModified)); break;
+            case SortMode.LastAccessedFirst:
+                _allFiles.Sort((a, b) => a.LastAccessed.CompareTo(b.LastAccessed)); break;
+            case SortMode.JunkScoreFirst:
+                _allFiles.Sort((a, b) => b.JunkScore.CompareTo(a.JunkScore)); break;
+        }
     }
 
     private void StartFresh()
@@ -673,3 +920,4 @@ public class MainViewModel : INotifyPropertyChanged
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
+

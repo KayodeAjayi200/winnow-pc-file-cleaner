@@ -1,0 +1,59 @@
+<Window x:Class="FileTinder.Views.ShortcutsOverlay"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Keyboard Shortcuts"
+        Width="500" Height="540"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{StaticResource BgDeepBrush}"
+        Foreground="{StaticResource TextPrimaryBrush}">
+
+    <Window.InputBindings>
+        <KeyBinding Key="Escape" Command="{Binding CloseCommand}"/>
+        <KeyBinding Key="OemQuestion" Command="{Binding CloseCommand}"/>
+    </Window.InputBindings>
+
+    <Border Padding="28">
+        <StackPanel>
+            <TextBlock Text="⌨  Keyboard Shortcuts"
+                       FontSize="20" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}"
+                       Margin="0,0,0,20"/>
+
+            <!-- Group: Swiping -->
+            <TextBlock Text="SWIPING" FontSize="10" FontWeight="Bold"
+                       Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8"/>
+
+            <ItemsControl x:Name="ShortcutList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,0,0,7">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <Border Background="#22FFFFFF" BorderBrush="{StaticResource BorderSubtleBrush}"
+                                        BorderThickness="1" CornerRadius="5" Padding="6,3" Margin="0,0,4,0">
+                                    <TextBlock Text="{Binding Key1}" FontSize="11" FontWeight="Bold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontFamily="Consolas, Courier New, Monospace"/>
+                                </Border>
+                                <TextBlock Text="{Binding Key2}" FontSize="12"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="2,0,0,0"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Text="{Binding Description}"
+                                       FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="Press ? or Escape to close"
+                       FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                       HorizontalAlignment="Center" Margin="0,20,0,0"/>
+        </StackPanel>
+    </Border>
+</Window>
