@@ -70,9 +70,10 @@
 
             <DataGrid.ContextMenu>
                 <ContextMenu>
-                    <MenuItem Header="🗑  Delete"  Click="CtxDelete_Click" Tag="delete"/>
-                    <MenuItem Header="✓  Keep"    Click="CtxKeep_Click"   Tag="keep"/>
+                    <MenuItem Header="🗑  Delete"       Click="CtxDelete_Click"/>
+                    <MenuItem Header="✓  Keep"          Click="CtxKeep_Click"/>
                     <Separator/>
+                    <MenuItem Header="▶  Open in app"   Click="CtxOpen_Click"/>
                     <MenuItem Header="📂  Open location" Click="CtxOpenLocation_Click"/>
                 </ContextMenu>
             </DataGrid.ContextMenu>

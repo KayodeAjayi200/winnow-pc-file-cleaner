@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using FileTinder.Models;
 using FileTinder.ViewModels;
 
@@ -12,6 +12,7 @@ public partial class FileListView : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        FileDataGrid.MouseDoubleClick += FileDataGrid_DoubleClick;
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -26,6 +27,12 @@ public partial class FileListView : UserControl
     {
         if (FileDataGrid.SelectedItem is FileItem f)
             Vm?.SelectFile(f);
+    }
+
+    private void FileDataGrid_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (FileDataGrid.SelectedItem is FileItem f && !f.IsMtp)
+            FilePreviewControl.OpenInDefaultApp(f.FullPath);
     }
 
     private void CtxDelete_Click(object sender, RoutedEventArgs e)
@@ -46,13 +53,15 @@ public partial class FileListView : UserControl
         }
     }
 
-    private void CtxOpenLocation_Click(object sender, RoutedEventArgs e)
+    private void CtxOpen_Click(object sender, RoutedEventArgs e)
     {
         if (FileDataGrid.SelectedItem is FileItem f && !f.IsMtp)
-        {
-            var dir = Path.GetDirectoryName(f.FullPath);
-            if (dir != null)
-                Process.Start("explorer.exe", $"/select,\"{f.FullPath}\"");
-        }
+            FilePreviewControl.OpenInDefaultApp(f.FullPath);
+    }
+
+    private void CtxOpenLocation_Click(object sender, RoutedEventArgs e)
+    {
+        if (FileDataGrid.SelectedItem is FileItem f)
+            FilePreviewControl.OpenFileLocation(f);
     }
 }

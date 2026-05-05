@@ -58,4 +58,16 @@ public partial class FileGridView : UserControl
             TileList.ItemsSource = vm.AllFiles;
         }
     }
+
+    private void QuickOpen_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is FileItem f && !f.IsMtp)
+            FilePreviewControl.OpenInDefaultApp(f.FullPath);
+    }
+
+    private void QuickOpenLocation_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is FileItem f)
+            FilePreviewControl.OpenFileLocation(f);
+    }
 }
