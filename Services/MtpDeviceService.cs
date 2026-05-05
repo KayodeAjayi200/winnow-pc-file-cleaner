@@ -1,6 +1,7 @@
 using MediaDevices;
 using FileTinder.Models;
 using System.IO;
+using System.Windows.Threading;
 
 namespace FileTinder.Services;
 
@@ -204,31 +205,48 @@ public static class MtpDeviceService
         }
     }
 
-    // ── STA threading helper ──────────────────────────────────────────────────
+    // ── Persistent STA thread ─────────────────────────────────────────────────
+    //
+    // WPD COM objects are STA-bound.  Spinning a new STA thread per call releases
+    // the RCW when that thread exits, causing InvalidComObjectException on the next
+    // call.  Fix: one long-lived STA thread with a Dispatcher message pump so all
+    // WPD COM calls share the same apartment for the app's lifetime.
 
-    /// <summary>
-    /// Runs <paramref name="func"/> on a dedicated STA thread and returns its result as a Task.
-    /// WPD COM APIs require STA; the ThreadPool uses MTA, which causes silent failures.
-    /// </summary>
+    private static readonly Lazy<Dispatcher> _staDispatcher = new(() =>
+    {
+        Dispatcher? d = null;
+        var ready = new System.Threading.ManualResetEventSlim();
+        var thread = new System.Threading.Thread(() =>
+        {
+            d = Dispatcher.CurrentDispatcher;
+            ready.Set();
+            Dispatcher.Run();   // keeps the thread alive with a COM message pump
+        });
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Name = "WinnowMTP-STA";
+        thread.Start();
+        ready.Wait();
+        return d!;
+    });
+
+    /// <summary>Runs <paramref name="func"/> on the persistent MTP STA thread.</summary>
     public static Task<T> RunSta<T>(Func<T> func)
     {
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var thread = new Thread(() =>
+        _staDispatcher.Value.InvokeAsync(() =>
         {
             try   { tcs.SetResult(func()); }
             catch (Exception ex) { tcs.SetException(ex); }
         });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.IsBackground = true;
-        thread.Start();
         return tcs.Task;
     }
 
-    /// <summary>Void STA runner with cancellation support — used for ScanAsync.</summary>
+    /// <summary>Void version of RunSta with cancellation support.</summary>
     public static Task RunSta(Action action, CancellationToken ct = default)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var thread = new Thread(() =>
+        _staDispatcher.Value.InvokeAsync(() =>
         {
             try
             {
@@ -239,9 +257,6 @@ public static class MtpDeviceService
             catch (OperationCanceledException) { tcs.SetCanceled(ct); }
             catch (Exception ex) { tcs.SetException(ex); }
         });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.IsBackground = true;
-        thread.Start();
         return tcs.Task;
     }
 
