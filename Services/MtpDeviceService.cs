@@ -20,23 +20,22 @@ public static class MtpDeviceService
             return MediaDevice.GetDevices()
                 .Select(d =>
                 {
-                    using (d)   // MediaDevice is IDisposable; release COM object when done
+                    try
                     {
-                        try
+                        d.Connect();
+                        var info = new MtpDeviceInfo
                         {
-                            d.Connect();
-                            var info = new MtpDeviceInfo
-                            {
-                                DeviceId     = d.DeviceId,
-                                FriendlyName = d.FriendlyName ?? d.Description ?? d.DeviceId
-                            };
-                            d.Disconnect();
-                            return info;
-                        }
-                        catch
-                        {
-                            return new MtpDeviceInfo { DeviceId = d.DeviceId, FriendlyName = d.DeviceId };
-                        }
+                            DeviceId     = d.DeviceId,
+                            FriendlyName = d.FriendlyName ?? d.Description ?? d.DeviceId
+                        };
+                        d.Disconnect();
+                        // Do NOT dispose here — GetDevices() may return cached COM proxies;
+                        // disposing invalidates the RCW for subsequent OpenDevice() calls.
+                        return info;
+                    }
+                    catch
+                    {
+                        return new MtpDeviceInfo { DeviceId = d.DeviceId, FriendlyName = d.DeviceId };
                     }
                 })
                 .ToList();
