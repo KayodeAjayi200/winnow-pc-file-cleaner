@@ -159,6 +159,56 @@ public static class MtpDeviceService
         System.IO.Path.Combine(System.IO.Path.GetTempPath(), "winnow_preview");
 
     /// <summary>
+    /// Gets the friendly display name of a connected MTP device.
+    /// </summary>
+    public static string GetDeviceFriendlyName(string deviceId)
+    {
+        try
+        {
+            var device = MediaDevice.GetDevices().FirstOrDefault(d => d.DeviceId == deviceId);
+            if (device == null) return "Device";
+            device.Connect();
+            var name = device.FriendlyName ?? device.Description ?? "Device";
+            device.Disconnect();
+            return name;
+        }
+        catch { return "Device"; }
+    }
+
+    /// <summary>
+    /// Downloads an MTP file to a local temp file, reporting bytes written via
+    /// <paramref name="progress"/> (bytesWritten, totalBytes).
+    /// Returns the local temp path, or null on failure.
+    /// </summary>
+    public static async Task<string?> DownloadToTempAsync(
+        string deviceId,
+        string mtpPath,
+        long fileSize,
+        IProgress<(long written, long total)>? progress = null,
+        CancellationToken ct = default)
+    {
+        return await RunSta<string?>(() =>
+        {
+            try
+            {
+                Directory.CreateDirectory(TempDir);
+                CleanTempFiles(3);
+
+                var ext      = System.IO.Path.GetExtension(mtpPath);
+                var tempFile = System.IO.Path.Combine(TempDir, $"preview_{Guid.NewGuid():N}{ext}");
+
+                using var device = OpenDevice(deviceId);
+                using var fsOut  = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 131072);
+                using var prog   = new ProgressStream(fsOut, fileSize, progress, ct);
+                device.DownloadFile(mtpPath, prog);
+                return tempFile;
+            }
+            catch (OperationCanceledException) { return null; }
+            catch { return null; }
+        });
+    }
+
+    /// <summary>
     /// Downloads an MTP file to a local temp file and returns its path.
     /// The caller is responsible for deleting the file when done.
     /// </summary>
@@ -197,6 +247,45 @@ public static class MtpDeviceService
                 f.Delete();
         }
         catch { }
+    }
+
+    /// <summary>Wraps a write-only stream and reports bytes-written progress.</summary>
+    private sealed class ProgressStream : Stream
+    {
+        private readonly Stream _inner;
+        private readonly long   _total;
+        private readonly IProgress<(long, long)>? _progress;
+        private readonly CancellationToken _ct;
+        private long _written;
+
+        public ProgressStream(Stream inner, long total,
+            IProgress<(long, long)>? progress, CancellationToken ct)
+        {
+            _inner    = inner;
+            _total    = total;
+            _progress = progress;
+            _ct       = ct;
+        }
+
+        public override bool CanWrite => true;
+        public override bool CanRead  => false;
+        public override bool CanSeek  => false;
+        public override long Length   => _total;
+        public override long Position { get => _written; set => throw new NotSupportedException(); }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            _ct.ThrowIfCancellationRequested();
+            _inner.Write(buffer, offset, count);
+            _written += count;
+            _progress?.Report((_written, _total));
+        }
+
+        public override void Flush()             => _inner.Flush();
+        public override int  Read(byte[] b, int o, int c) => throw new NotSupportedException();
+        public override long Seek(long o, SeekOrigin s)   => throw new NotSupportedException();
+        public override void SetLength(long v)             => throw new NotSupportedException();
+        protected override void Dispose(bool d) { if (d) _inner.Dispose(); base.Dispose(d); }
     }
 
     // ── Folder metadata ───────────────────────────────────────────────────────

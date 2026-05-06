@@ -64,7 +64,7 @@ public partial class FilePreviewControl : UserControl
 
     /// <summary>
     /// Opens the file in its default app.
-    /// For MTP files, downloads to temp first.
+    /// For MTP files, shows a download-progress dialog then opens from temp.
     /// </summary>
     public static async void OpenInDefaultApp(FileItem file)
     {
@@ -76,41 +76,83 @@ public partial class FilePreviewControl : UserControl
 
         if (file.MtpDeviceId == null) return;
 
+        // Show a progress window while downloading
+        var progressWin = new MtpDownloadProgressWindow(file.Name, file.Size)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+        progressWin.Show();
+
+        var cts      = new CancellationTokenSource();
+        progressWin.Cancelled += () => cts.Cancel();
+
+        string? tempPath = null;
         try
         {
-            var tempPath = await FileTinder.Services.MtpDeviceService.RunSta(() =>
-                FileTinder.Services.MtpDeviceService.DownloadToTemp(file.MtpDeviceId, file.FullPath));
-
-            if (tempPath == null)
+            var progress = new Progress<(long written, long total)>(t =>
             {
-                System.Windows.MessageBox.Show(
-                    "Could not download the file from the device.",
-                    "Open failed",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Warning);
-                return;
-            }
+                progressWin.Report(t.written, t.total);
+            });
 
-            Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
+            tempPath = await MtpDeviceService.DownloadToTempAsync(
+                file.MtpDeviceId, file.FullPath, file.Size, progress, cts.Token);
         }
+        catch (OperationCanceledException)
+        {
+            progressWin.Close();
+            return;
+        }
+        catch (Exception ex)
+        {
+            progressWin.Close();
+            System.Windows.MessageBox.Show(
+                $"Could not download the file:\n{ex.Message}",
+                "Open failed", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        progressWin.Close();
+
+        if (tempPath == null || cts.IsCancellationRequested) return;
+
+        try { Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true }); }
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(
                 $"Could not open file:\n{ex.Message}",
-                "Open failed",
-                System.Windows.MessageBoxButton.OK,
+                "Open failed", System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Warning);
         }
     }
 
     /// Opens Windows Explorer with the file pre-selected (local files only).
+    /// For MTP files, opens Explorer to "This PC" and shows the device path.
     public static void OpenFileLocation(FileItem file)
     {
         if (file.IsMtp)
         {
+            // Get device name (quick sync call — already connected)
+            string deviceName = "Device";
+            try { if (file.MtpDeviceId != null) deviceName = MtpDeviceService.GetDeviceFriendlyName(file.MtpDeviceId); }
+            catch { }
+
+            // Build a readable path: "Apple iPhone > Internal Storage > DCIM > 100APPLE"
+            var parts = file.FullPath.Replace('/', '\\')
+                .Split('\\', StringSplitOptions.RemoveEmptyEntries);
+            string folderPath = string.Join(" > ", parts.Take(parts.Length - 1));
+
+            // Open Explorer to "This PC" so user can find the device
+            try { Process.Start(new ProcessStartInfo("explorer.exe", "shell:MyComputerFolder") { UseShellExecute = true }); }
+            catch { }
+
+            // Copy path to clipboard for convenience
+            var fullNav = $"{deviceName} > {folderPath}";
+            try { System.Windows.Clipboard.SetText(fullNav); } catch { }
+
             System.Windows.MessageBox.Show(
-                "Open file location is not available for files on portable devices.",
-                "Not supported",
+                $"Explorer has been opened to \"This PC\".\n\nNavigate to:\n{fullNav}\n\n(Path copied to clipboard)",
+                "File location",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
             return;

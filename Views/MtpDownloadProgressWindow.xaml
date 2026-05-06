@@ -1,0 +1,66 @@
+<Window x:Class="FileTinder.Views.MtpDownloadProgressWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Opening file…"
+        Width="420" Height="160"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="#1A1A2E"
+        Foreground="White"
+        FontFamily="Segoe UI">
+
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Background"   Value="#2D2D44"/>
+            <Setter Property="Foreground"   Value="White"/>
+            <Setter Property="BorderBrush"  Value="#3D3D55"/>
+            <Setter Property="Padding"      Value="16,6"/>
+            <Setter Property="Cursor"       Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1" CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- File name -->
+        <TextBlock x:Name="FileNameText" Grid.Row="0"
+                   FontSize="13" FontWeight="SemiBold"
+                   TextTrimming="CharacterEllipsis"
+                   Foreground="#E2E8F0"/>
+
+        <!-- Progress bar -->
+        <ProgressBar x:Name="ProgressBar" Grid.Row="2"
+                     Height="8" Minimum="0" Maximum="100"
+                     Foreground="#6366F1" Background="#2D2D44"
+                     BorderThickness="0"/>
+
+        <!-- Status row -->
+        <Grid Grid.Row="4">
+            <TextBlock x:Name="StatusText"
+                       FontSize="12" Foreground="#94A3B8"
+                       VerticalAlignment="Center"/>
+            <Button x:Name="CancelBtn" Content="Cancel"
+                    HorizontalAlignment="Right"
+                    Click="Cancel_Click"/>
+        </Grid>
+    </Grid>
+</Window>
