@@ -92,7 +92,7 @@
                                VerticalAlignment="Center"/>
                     <TextBlock VerticalAlignment="Center" FontSize="13">
                         <Run Text="Winnow v" Foreground="#6EE7B7"/>
-                        <Run Text="{Binding UpdateVersion}" FontWeight="Bold" Foreground="#6EE7B7"/>
+                        <Run Text="{Binding UpdateVersion, Mode=OneWay}" FontWeight="Bold" Foreground="#6EE7B7"/>
                         <Run Text=" is available" Foreground="#A7F3D0"/>
                     </TextBlock>
                 </StackPanel>
@@ -102,10 +102,10 @@
                                 Visibility="{Binding IsDownloadingUpdate, Converter={StaticResource BoolToVis}}">
                         <TextBlock Text="Downloading…" FontSize="12" Foreground="#6EE7B7"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <ProgressBar Value="{Binding UpdateDownloadProgress}" Maximum="100"
+                        <ProgressBar Value="{Binding UpdateDownloadProgress, Mode=OneWay}" Maximum="100"
                                      Width="100" Height="8" VerticalAlignment="Center"
                                      Foreground="#10B981" Background="#1A10B981"/>
-                        <TextBlock Text="{Binding UpdateDownloadProgress, StringFormat={}{0}%}"
+                        <TextBlock Text="{Binding UpdateDownloadProgress, Mode=OneWay, StringFormat={}{0}%}"
                                    FontSize="11" Foreground="#6EE7B7" VerticalAlignment="Center"
                                    Margin="6,0,0,0"/>
                     </StackPanel>
