@@ -165,12 +165,16 @@ public static class MtpDeviceService
     {
         try
         {
-            var device = MediaDevice.GetDevices().FirstOrDefault(d => d.DeviceId == deviceId);
-            if (device == null) return "Device";
-            device.Connect();
-            var name = device.FriendlyName ?? device.Description ?? "Device";
-            device.Disconnect();
-            return name;
+            // Run synchronously on a fresh STA thread
+            return RunStaFresh<string>(() =>
+            {
+                var device = MediaDevice.GetDevices().FirstOrDefault(d => d.DeviceId == deviceId);
+                if (device == null) return "Device";
+                device.Connect();
+                var name = device.FriendlyName ?? device.Description ?? "Device";
+                device.Disconnect();
+                return name;
+            }).GetAwaiter().GetResult();
         }
         catch { return "Device"; }
     }
@@ -187,7 +191,7 @@ public static class MtpDeviceService
         IProgress<(long written, long total)>? progress = null,
         CancellationToken ct = default)
     {
-        return await RunSta<string?>(() =>
+        return await RunStaFresh<string?>(() =>
         {
             try
             {
@@ -205,7 +209,7 @@ public static class MtpDeviceService
             }
             catch (OperationCanceledException) { return null; }
             catch { return null; }
-        });
+        }, ct);
     }
 
     /// <summary>
@@ -297,7 +301,7 @@ public static class MtpDeviceService
     public static async Task<List<MtpFolderInfo>> GetSubfoldersQuickAsync(
         string deviceId, string path, CancellationToken ct = default)
     {
-        return await RunSta(() =>
+        return await RunStaFresh<List<MtpFolderInfo>>(() =>
         {
             using var device = OpenDevice(deviceId);
             var dir = device.GetDirectoryInfo(path);
@@ -308,7 +312,7 @@ public static class MtpDeviceService
                 result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
             }
             return result;
-        });
+        }, ct);
     }
 
     /// <summary>
@@ -322,7 +326,7 @@ public static class MtpDeviceService
         Action<string, long, int> onFolderSized,
         CancellationToken ct = default)
     {
-        await RunSta(() =>
+        await RunStaFreshVoid(() =>
         {
             using var device = OpenDevice(deviceId);
             foreach (var folderPath in folderPaths)
@@ -344,7 +348,7 @@ public static class MtpDeviceService
 
                 onFolderSized(folderPath, size, count);
             }
-        });
+        }, ct);
     }
 
     // ── Copy to PC ────────────────────────────────────────────────────────────
@@ -556,7 +560,7 @@ public static class MtpDeviceService
         return d!;
     });
 
-    /// <summary>Runs <paramref name="func"/> on the persistent MTP STA thread.</summary>
+    /// <summary>Runs <paramref name="func"/> on the persistent MTP STA thread (scanner thread).</summary>
     public static Task<T> RunSta<T>(Func<T> func)
     {
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -583,6 +587,50 @@ public static class MtpDeviceService
             catch (OperationCanceledException) { tcs.SetCanceled(ct); }
             catch (Exception ex) { tcs.SetException(ex); }
         });
+        return tcs.Task;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="func"/> on a FRESH STA thread — independent of the
+    /// shared scanner STA thread, so backup/preview ops never queue behind a scan.
+    /// </summary>
+    private static Task<T> RunStaFresh<T>(Func<T> func, CancellationToken ct = default)
+    {
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new System.Threading.Thread(() =>
+        {
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                tcs.SetResult(func());
+            }
+            catch (OperationCanceledException) { tcs.SetCanceled(ct); }
+            catch (Exception ex) { tcs.SetException(ex); }
+        });
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Start();
+        return tcs.Task;
+    }
+
+    /// <summary>Void version of RunStaFresh.</summary>
+    private static Task RunStaFreshVoid(Action action, CancellationToken ct = default)
+    {
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new System.Threading.Thread(() =>
+        {
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                action();
+                tcs.SetResult();
+            }
+            catch (OperationCanceledException) { tcs.SetCanceled(ct); }
+            catch (Exception ex) { tcs.SetException(ex); }
+        });
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Start();
         return tcs.Task;
     }
 
