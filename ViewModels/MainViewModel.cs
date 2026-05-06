@@ -450,6 +450,16 @@ public class MainViewModel : INotifyPropertyChanged
 
         Buckets.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasBuckets));
         DeletedEntries.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasDeletedEntries));
+
+        // When a download or backup needs sole access to the MTP device, cancel the scan first
+        MtpDeviceService.BeforeExclusiveDeviceAccess += async () =>
+        {
+            if (IsScanning && _scanCts != null)
+            {
+                _scanCts.Cancel();
+                await Task.Delay(600); // give STA thread time to see cancellation
+            }
+        };
     }
 
     // ── Actions ────────────────────────────────────────────────────────────────

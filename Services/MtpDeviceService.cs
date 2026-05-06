@@ -159,6 +159,23 @@ public static class MtpDeviceService
         System.IO.Path.Combine(System.IO.Path.GetTempPath(), "winnow_preview");
 
     /// <summary>
+    /// Raised just before an exclusive MTP operation (download, backup folder listing)
+    /// needs sole access to the device.  Subscribers should cancel any active scan
+    /// and return only after the scan's STA thread has had time to release the device.
+    /// </summary>
+    public static event Func<Task>? BeforeExclusiveDeviceAccess;
+
+    private static async Task YieldDeviceAsync(CancellationToken ct = default)
+    {
+        if (BeforeExclusiveDeviceAccess != null)
+        {
+            await BeforeExclusiveDeviceAccess.Invoke();
+            // Give the scanner's STA thread time to see the cancellation and disconnect.
+            await Task.Delay(900, ct);
+        }
+    }
+
+    /// <summary>
     /// Gets the friendly display name of a connected MTP device.
     /// </summary>
     public static string GetDeviceFriendlyName(string deviceId)
@@ -191,6 +208,9 @@ public static class MtpDeviceService
         IProgress<(long written, long total)>? progress = null,
         CancellationToken ct = default)
     {
+        // Release any active scan so we get sole access to the device
+        await YieldDeviceAsync(ct);
+
         return await RunStaFresh<string?>(() =>
         {
             try
@@ -301,6 +321,9 @@ public static class MtpDeviceService
     public static async Task<List<MtpFolderInfo>> GetSubfoldersQuickAsync(
         string deviceId, string path, CancellationToken ct = default)
     {
+        // Yield device so a concurrent scan can release its connection first
+        await YieldDeviceAsync(ct);
+
         return await RunStaFresh<List<MtpFolderInfo>>(() =>
         {
             using var device = OpenDevice(deviceId);

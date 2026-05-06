@@ -76,6 +76,28 @@ public partial class FilePreviewControl : UserControl
 
         if (file.MtpDeviceId == null) return;
 
+        // Warn before downloading large files
+        if (file.Size > 104_857_600) // 100 MB
+        {
+            string sizeText = file.Size >= 1_073_741_824
+                ? $"{file.Size / 1_073_741_824.0:F1} GB"
+                : $"{file.Size / 1_048_576.0:F0} MB";
+            // Estimate at ~10 MB/s (conservative MTP/USB speed)
+            long secsEst = Math.Max(1, file.Size / 10_000_000);
+            string timeEst = secsEst < 60 ? $"{secsEst}s" : $"{secsEst / 60}m {secsEst % 60}s";
+
+            var result = System.Windows.MessageBox.Show(
+                $"\"{file.Name}\" is {sizeText}.\n\n" +
+                $"To open it, the full file must be downloaded first " +
+                $"(estimated: {timeEst} at typical USB speed).\n\n" +
+                $"Any active scan will be paused while downloading.\n\nContinue?",
+                "Large file - download required",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+
+            if (result != System.Windows.MessageBoxResult.Yes) return;
+        }
+
         // Show a progress window while downloading
         var progressWin = new MtpDownloadProgressWindow(file.Name, file.Size)
         {
@@ -83,7 +105,7 @@ public partial class FilePreviewControl : UserControl
         };
         progressWin.Show();
 
-        var cts      = new CancellationTokenSource();
+        var cts = new CancellationTokenSource();
         progressWin.Cancelled += () => cts.Cancel();
 
         string? tempPath = null;
@@ -114,7 +136,18 @@ public partial class FilePreviewControl : UserControl
 
         progressWin.Close();
 
-        if (tempPath == null || cts.IsCancellationRequested) return;
+        if (cts.IsCancellationRequested) return;
+
+        if (tempPath == null)
+        {
+            System.Windows.MessageBox.Show(
+                "Download failed. If a scan was running, try again — the scan has now been paused.\n\n" +
+                "If the problem persists, the file may be locked or the device connection was interrupted.",
+                "Open failed",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
 
         try { Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true }); }
         catch (Exception ex)
