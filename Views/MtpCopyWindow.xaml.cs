@@ -91,7 +91,6 @@ public partial class MtpCopyWindow : Window
 
     private async Task LoadFoldersAsync()
     {
-        // Cancel any in-progress size calculation from a previous load
         _sizeCts?.Cancel();
         _sizeCts = new CancellationTokenSource();
         var sizeCt = _sizeCts.Token;
@@ -101,8 +100,6 @@ public partial class MtpCopyWindow : Window
         EmptyText.Visibility          = Visibility.Collapsed;
         CopyBtn.IsEnabled             = false;
         _folders.Clear();
-
-        var cacheKey = ScanCacheService.MakeBackupCacheKey(_deviceId, _sourcePath);
 
         // ── Phase 1: list folder names immediately ────────────────────────────
         try
@@ -123,39 +120,8 @@ public partial class MtpCopyWindow : Window
             }
 
             FolderScrollViewer.Visibility = Visibility.Visible;
-
-            // ── Phase 1b: apply cached sizes instantly if available ───────────
-            var cached = ScanCacheService.LoadFolderSizes(cacheKey);
-            if (cached != null)
-            {
-                var sizeMap = cached.Value.Folders.ToDictionary(f => f.Path);
-                bool allHit = true;
-                foreach (var folder in _folders)
-                {
-                    if (sizeMap.TryGetValue(folder.Path, out var entry))
-                    {
-                        folder.Size      = entry.Size;
-                        folder.FileCount = entry.FileCount;
-                    }
-                    else { allHit = false; }
-                }
-
-                UpdateSummary();
-                RefreshCopyBtn();
-
-                // Show cache age in loading label if all sizes came from cache
-                if (allHit)
-                {
-                    ShowCacheAgeHint(cached.Value.ScannedAt);
-                    return; // no need to re-calculate sizes
-                }
-                // Partial hit — still recalculate missing ones below
-            }
-            else
-            {
-                UpdateSummary();
-                RefreshCopyBtn();
-            }
+            UpdateSummary();
+            RefreshCopyBtn();
         }
         catch (OperationCanceledException) { return; }
         catch (Exception ex)
@@ -168,8 +134,6 @@ public partial class MtpCopyWindow : Window
 
         // ── Phase 2: calculate sizes in the background (non-blocking) ─────────
         var folderMap = _folders.ToDictionary(f => f.Path);
-        int remaining = folderMap.Count;
-        var collected = new System.Collections.Concurrent.ConcurrentBag<ScanCacheService.FolderSizeEntry>();
 
         try
         {
@@ -178,34 +142,20 @@ public partial class MtpCopyWindow : Window
                 folderMap.Keys.ToList(),
                 (path, size, count) =>
                 {
-                    collected.Add(new ScanCacheService.FolderSizeEntry(path, size, count));
                     Dispatcher.BeginInvoke(() =>
                     {
                         if (folderMap.TryGetValue(path, out var item))
                         {
                             item.Size      = size;
                             item.FileCount = count;
-                            remaining--;
                             UpdateSummary();
                         }
                     });
                 },
                 sizeCt);
-
-            // All sizes computed — save to cache
-            if (!sizeCt.IsCancellationRequested && collected.Count > 0)
-                ScanCacheService.SaveFolderSizesAsync(cacheKey, collected.ToList());
         }
         catch (OperationCanceledException) { /* user navigated away — fine */ }
         catch { /* size calc failed silently — names already shown */ }
-    }
-
-    private void ShowCacheAgeHint(DateTime scannedAt)
-    {
-        // Reuse the loading label (already hidden) — show a subtle banner instead
-        var age = ScanCacheService.FormatAge(scannedAt);
-        CacheAgeBanner.Text       = $"⚡ Sizes from cache · calculated {age}  ↺";
-        CacheAgeBanner.Visibility = Visibility.Visible;
     }
 
     // ── Source change ──────────────────────────────────────────────────────────
@@ -220,15 +170,6 @@ public partial class MtpCopyWindow : Window
             SourcePathText.Text = newPath;
             await LoadFoldersAsync();
         }
-    }
-
-    /// <summary>User clicked the cache-age hint — invalidate cache and recalculate.</summary>
-    private async void CacheAgeBanner_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        var cacheKey = ScanCacheService.MakeBackupCacheKey(_deviceId, _sourcePath);
-        ScanCacheService.Invalidate(cacheKey);
-        CacheAgeBanner.Visibility = Visibility.Collapsed;
-        await LoadFoldersAsync();
     }
 
     // ── Destination browse ─────────────────────────────────────────────────────
