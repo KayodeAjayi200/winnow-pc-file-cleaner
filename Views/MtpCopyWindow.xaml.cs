@@ -21,11 +21,24 @@ public partial class MtpCopyWindow : Window
     {
         public string Path        { get; init; } = string.Empty;
         public string DisplayName { get; init; } = string.Empty;
-        public long   Size        { get; init; }
-        public int    FileCount   { get; init; }
 
-        public string SizeText      => FormatSize(Size);
-        public string FileCountText => FileCount == 1 ? "1 file" : $"{FileCount:N0} files";
+        private long _size = -1;
+        private int  _fileCount = -1;
+
+        public long Size
+        {
+            get => _size;
+            set { _size = value; OnPropertyChanged(); OnPropertyChanged(nameof(SizeText)); OnPropertyChanged(nameof(FileCountText)); }
+        }
+
+        public int FileCount
+        {
+            get => _fileCount;
+            set { _fileCount = value; OnPropertyChanged(); OnPropertyChanged(nameof(FileCountText)); }
+        }
+
+        public string SizeText      => _size < 0 ? "Calculating…" : FormatSize(_size);
+        public string FileCountText => _fileCount < 0 ? "" : (_fileCount == 1 ? "1 file" : $"{_fileCount:N0} files");
 
         private bool _isSelected = true;
         public bool IsSelected
@@ -74,56 +87,88 @@ public partial class MtpCopyWindow : Window
 
     // ── Folder loading ─────────────────────────────────────────────────────────
 
+    private CancellationTokenSource? _sizeCts;
+
     private async Task LoadFoldersAsync()
     {
-        LoadingPanel.Visibility      = Visibility.Visible;
+        // Cancel any in-progress size calculation from a previous load
+        _sizeCts?.Cancel();
+        _sizeCts = new CancellationTokenSource();
+        var sizeCt = _sizeCts.Token;
+
+        LoadingPanel.Visibility       = Visibility.Visible;
         FolderScrollViewer.Visibility = Visibility.Collapsed;
         EmptyText.Visibility          = Visibility.Collapsed;
         CopyBtn.IsEnabled             = false;
         _folders.Clear();
 
+        // ── Phase 1: list folder names immediately ────────────────────────────
         try
         {
-            var infos = await MtpDeviceService.GetSubfolderInfosAsync(
-                _deviceId, _sourcePath, CancellationToken.None);
+            var infos = await MtpDeviceService.GetSubfoldersQuickAsync(
+                _deviceId, _sourcePath, sizeCt);
 
             _folders.Clear();
             foreach (var info in infos.OrderByDescending(i => i.Name))
-            {
-                _folders.Add(new FolderItem
-                {
-                    Path        = info.Path,
-                    DisplayName = info.Name,
-                    Size        = info.Size,
-                    FileCount   = info.FileCount
-                });
-            }
+                _folders.Add(new FolderItem { Path = info.Path, DisplayName = info.Name });
 
             LoadingPanel.Visibility = Visibility.Collapsed;
 
             if (_folders.Count == 0)
             {
                 EmptyText.Visibility = Visibility.Visible;
+                return;
             }
-            else
-            {
-                FolderScrollViewer.Visibility = Visibility.Visible;
-                UpdateSummary();
-                RefreshCopyBtn();
-            }
+
+            FolderScrollViewer.Visibility = Visibility.Visible;
+            UpdateSummary();
+            RefreshCopyBtn();
         }
+        catch (OperationCanceledException) { return; }
         catch (Exception ex)
         {
             LoadingPanel.Visibility = Visibility.Collapsed;
             EmptyText.Text          = $"Error loading folders: {ex.Message}";
             EmptyText.Visibility    = Visibility.Visible;
+            return;
         }
+
+        // ── Phase 2: calculate sizes in the background (non-blocking) ─────────
+        // Build a snapshot of paths so we can pass them to the background task
+        var folderMap = _folders.ToDictionary(f => f.Path);
+        int remaining = folderMap.Count;
+
+        try
+        {
+            await MtpDeviceService.CalculateFolderSizesAsync(
+                _deviceId,
+                folderMap.Keys.ToList(),
+                (path, size, count) =>
+                {
+                    Dispatcher.BeginInvoke(() =>
+                    {
+                        if (folderMap.TryGetValue(path, out var item))
+                        {
+                            item.Size      = size;
+                            item.FileCount = count;
+                            remaining--;
+                            // Update summary once all sizes are known
+                            if (remaining == 0) UpdateSummary();
+                            else UpdateSummary(); // keep live total
+                        }
+                    });
+                },
+                sizeCt);
+        }
+        catch (OperationCanceledException) { /* user navigated away — fine */ }
+        catch { /* size calc failed silently — names already shown */ }
     }
 
     // ── Source change ──────────────────────────────────────────────────────────
 
     private async void ChangeSource_Click(object sender, RoutedEventArgs e)
     {
+        _sizeCts?.Cancel();
         // Show a simple input dialog asking for a path, or reuse the MTP folder
         // picker.  For simplicity we show a text input MessageBox-style.
         var win = new MtpFolderInputDialog(_deviceId) { Owner = this };
@@ -190,11 +235,13 @@ public partial class MtpCopyWindow : Window
             return;
         }
 
-        long totalBytes = selected.Sum(f => f.Size);
-        int  totalFiles = selected.Sum(f => f.FileCount);
+        bool anyPending = selected.Any(f => f.Size < 0);
+        long totalBytes = selected.Where(f => f.Size >= 0).Sum(f => f.Size);
+        int  totalFiles = selected.Where(f => f.FileCount >= 0).Sum(f => f.FileCount);
+
         SummaryText.Text = $"{selected.Count} folder{(selected.Count == 1 ? "" : "s")} · "
-                         + $"{totalFiles:N0} files · "
-                         + FormatSize(totalBytes);
+                         + (anyPending ? "calculating size…"
+                                       : $"{totalFiles:N0} files · {FormatSize(totalBytes)}");
     }
 
     private static string FormatSize(long bytes)

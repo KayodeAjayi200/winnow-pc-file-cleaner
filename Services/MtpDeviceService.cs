@@ -202,11 +202,10 @@ public static class MtpDeviceService
     // ── Folder metadata ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns immediate sub-directory names under <paramref name="path"/> together
-    /// with their total file count and combined size.  Sizes are calculated lazily
-    /// in a background STA task so the caller can show names immediately.
+    /// Phase 1 (fast): returns sub-directory names immediately — no size calculation.
+    /// Call <see cref="CalculateFolderSizesAsync"/> afterwards to fill in sizes.
     /// </summary>
-    public static async Task<List<MtpFolderInfo>> GetSubfolderInfosAsync(
+    public static async Task<List<MtpFolderInfo>> GetSubfoldersQuickAsync(
         string deviceId, string path, CancellationToken ct = default)
     {
         return await RunSta(() =>
@@ -214,33 +213,48 @@ public static class MtpDeviceService
             using var device = OpenDevice(deviceId);
             var dir = device.GetDirectoryInfo(path);
             var result = new List<MtpFolderInfo>();
-
             foreach (var sub in dir.EnumerateDirectories())
+            {
+                ct.ThrowIfCancellationRequested();
+                result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
+            }
+            return result;
+        });
+    }
+
+    /// <summary>
+    /// Phase 2 (slow): walks each folder and reports (path, size, fileCount) via
+    /// <paramref name="onFolderSized"/> as each one finishes — keeps a single
+    /// device connection open for the whole batch for performance.
+    /// </summary>
+    public static async Task CalculateFolderSizesAsync(
+        string deviceId,
+        IEnumerable<string> folderPaths,
+        Action<string, long, int> onFolderSized,
+        CancellationToken ct = default)
+    {
+        await RunSta(() =>
+        {
+            using var device = OpenDevice(deviceId);
+            foreach (var folderPath in folderPaths)
             {
                 ct.ThrowIfCancellationRequested();
                 long size  = 0;
                 int  count = 0;
                 try
                 {
-                    foreach (var f in device.EnumerateFiles(sub.FullName, "*", SearchOption.AllDirectories))
+                    foreach (var f in device.EnumerateFiles(folderPath, "*", SearchOption.AllDirectories))
                     {
                         ct.ThrowIfCancellationRequested();
-                        try
-                        {
-                            var info = device.GetFileInfo(f);
-                            size  += (long)info.Length;
-                            count++;
-                        }
+                        try { var fi = device.GetFileInfo(f); size += (long)fi.Length; count++; }
                         catch { }
                     }
                 }
                 catch (OperationCanceledException) { throw; }
                 catch { }
 
-                result.Add(new MtpFolderInfo(sub.FullName, sub.Name, size, count));
+                onFolderSized(folderPath, size, count);
             }
-
-            return result;
         });
     }
 
