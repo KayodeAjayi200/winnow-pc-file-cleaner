@@ -47,7 +47,7 @@ public class MainViewModel : INotifyPropertyChanged
         set { _folderPath = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasFolder)); }
     }
 
-    private bool _includeSubfolders;
+    private bool _includeSubfolders = true;
     public bool IncludeSubfolders
     {
         get => _includeSubfolders;
