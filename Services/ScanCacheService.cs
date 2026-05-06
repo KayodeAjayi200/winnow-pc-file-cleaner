@@ -130,4 +130,58 @@ public static class ScanCacheService
         if (age.TotalHours < 24)   return $"{(int)age.TotalHours} hours ago";
         return $"{(int)age.TotalDays} days ago";
     }
+
+    // ── Backup folder-size cache ───────────────────────────────────────────────
+
+    /// <summary>One cached folder with its computed size + file count.</summary>
+    public sealed record FolderSizeEntry(string Path, long Size, int FileCount);
+
+    private sealed record FolderSizeCacheEntry(long ScannedAtTicks, List<FolderSizeEntry> Folders);
+
+    /// <summary>
+    /// Cache key for a backup folder-size listing.
+    /// Prefixed with "bs_" so it never collides with file-scan keys.
+    /// </summary>
+    public static string MakeBackupCacheKey(string deviceId, string sourcePath)
+    {
+        var raw   = $"backup|{deviceId}|{sourcePath.ToLowerInvariant()}";
+        var bytes = System.Security.Cryptography.MD5.HashData(
+            System.Text.Encoding.UTF8.GetBytes(raw));
+        return "bs_" + Convert.ToHexString(bytes).ToLower();
+    }
+
+    /// <summary>
+    /// Loads cached folder sizes.  Returns null if no cache or TTL expired (24 h for MTP).
+    /// </summary>
+    public static (List<FolderSizeEntry> Folders, DateTime ScannedAt)? LoadFolderSizes(string cacheKey)
+    {
+        try
+        {
+            var path = Path.Combine(CacheDir, $"{cacheKey}.json");
+            if (!File.Exists(path)) return null;
+
+            if (DateTime.Now - File.GetLastWriteTime(path) > MtpTtl) return null;
+
+            var entry = JsonSerializer.Deserialize<FolderSizeCacheEntry>(File.ReadAllText(path));
+            if (entry == null || entry.Folders.Count == 0) return null;
+
+            return (entry.Folders, new DateTime(entry.ScannedAtTicks, DateTimeKind.Local));
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Saves folder sizes to cache (fire-and-forget).</summary>
+    public static void SaveFolderSizesAsync(string cacheKey, List<FolderSizeEntry> folders)
+        => Task.Run(() =>
+        {
+            try
+            {
+                Directory.CreateDirectory(CacheDir);
+                var entry = new FolderSizeCacheEntry(DateTime.Now.Ticks, folders);
+                File.WriteAllText(
+                    Path.Combine(CacheDir, $"{cacheKey}.json"),
+                    JsonSerializer.Serialize(entry));
+            }
+            catch { }
+        });
 }

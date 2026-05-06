@@ -209,6 +209,17 @@
                            Foreground="#666" FontSize="13"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            Visibility="Collapsed"/>
+
+                <!-- Cache-age hint — shown when sizes loaded from cache -->
+                <TextBlock x:Name="CacheAgeBanner"
+                           FontSize="11"
+                           Foreground="#5CA08A"
+                           HorizontalAlignment="Right"
+                           Margin="0,4,4,0"
+                           Cursor="Hand"
+                           Visibility="Collapsed"
+                           MouseLeftButtonUp="CacheAgeBanner_Click"
+                           ToolTip="Click to recalculate sizes from device"/>
             </Grid>
         </Border>
 
