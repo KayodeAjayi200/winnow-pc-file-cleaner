@@ -22,6 +22,10 @@ public class MainViewModel : INotifyPropertyChanged
     private DispatcherTimer?         _scanTimer;
     private DispatcherTimer?         _bannerTimer;
 
+    // Cache / loading-screen state
+    private string _currentCacheKey     = string.Empty;
+    private bool   _isInitialSourceScan;               // true = first scan of a new source
+
     // Undo stack (local files only — MTP deletes are permanent)
     private readonly Stack<DeletedEntry> _undoStack = new();
     private const int MaxUndoDepth = 10;
@@ -108,6 +112,34 @@ public class MainViewModel : INotifyPropertyChanged
     }
     public bool HasSessionBanner => !string.IsNullOrEmpty(_sessionBanner);
 
+    // ── Initial loading state / cache banner ────────────────────────────────────
+
+    /// <summary>True while scanning a new source for the first time (not a filter change).</summary>
+    public bool IsLoadingInitial => _isScanning && _isInitialSourceScan;
+
+    private bool _loadedFromCache;
+    public bool LoadedFromCache
+    {
+        get => _loadedFromCache;
+        private set { _loadedFromCache = value; OnPropertyChanged(); OnPropertyChanged(nameof(ShowCacheBanner)); }
+    }
+
+    private string _cacheAgeText = string.Empty;
+    public string CacheAgeText
+    {
+        get => _cacheAgeText;
+        private set { _cacheAgeText = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>True when files came from cache and the overlay is not showing.</summary>
+    public bool ShowCacheBanner => _loadedFromCache && !IsLoadingInitial;
+
+    /// <summary>Friendly name of the current source shown on the loading overlay.</summary>
+    public string ScanSourceText => IsMtpSource
+        ? $"{_mtpDeviceName} · {(string.IsNullOrEmpty(FolderPath) ? "All files" : System.IO.Path.GetFileName(FolderPath))}"
+        : string.IsNullOrEmpty(FolderPath) ? "Selected folder"
+            : System.IO.Path.GetFileName(FolderPath) is { Length: > 0 } n ? n : FolderPath;
+
     // ── Scanning state ─────────────────────────────────────────────────────────
 
     private bool _isScanning;
@@ -118,6 +150,8 @@ public class MainViewModel : INotifyPropertyChanged
         {
             _isScanning = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsLoadingInitial));
+            OnPropertyChanged(nameof(ShowCacheBanner));
             OnPropertyChanged(nameof(ScanStatusText));
             OnPropertyChanged(nameof(QueueInfo));
         }
@@ -377,6 +411,8 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand KeepCommand              { get; }
     public ICommand DeleteCommand            { get; }
     public ICommand ReloadCommand            { get; }
+    public ICommand RefreshCommand           { get; }
+    public ICommand CancelScanCommand        { get; }
     public ICommand ResetStatsCommand        { get; }
     public ICommand StartFreshCommand        { get; }
     public ICommand AddToNewBucketCommand    { get; }
@@ -392,6 +428,8 @@ public class MainViewModel : INotifyPropertyChanged
         KeepCommand               = new RelayCommand(Keep,   () => HasCurrentFile);
         DeleteCommand             = new RelayCommand(Delete, () => HasCurrentFile);
         ReloadCommand             = new RelayCommand(LoadFiles, () => HasFolder);
+        RefreshCommand            = new RelayCommand(RefreshScan, () => HasFolder);
+        CancelScanCommand         = new RelayCommand(CancelScan, () => IsScanning);
         ResetStatsCommand         = new RelayCommand(ResetStats);
         StartFreshCommand         = new RelayCommand(StartFresh, () => HasFolder);
         AddToNewBucketCommand     = new RelayCommand(AddToNewBucket, () => HasCurrentFile);
@@ -435,6 +473,69 @@ public class MainViewModel : INotifyPropertyChanged
     public async void LoadFiles()
     {
         if (!HasFolder) return;
+
+        // ── Source-change detection ─────────────────────────────────────────────
+        var newCacheKey    = ScanCacheService.MakeCacheKey(FolderPath, _mtpDeviceId);
+        bool isSourceChange = newCacheKey != _currentCacheKey;
+        _currentCacheKey   = newCacheKey;
+
+        bool isDefaultFilters = _selectedTypeFilter == FileTypeCategory.All
+                             && _selectedDateFilter  == DateFilter.Any;
+
+        // ── Cache hit? Load instantly without a blocking overlay ───────────────
+        if (isSourceChange && isDefaultFilters)
+        {
+            var cached = ScanCacheService.Load(newCacheKey, IsMtpSource);
+            if (cached != null)
+            {
+                _scanCts?.Cancel();
+                _isInitialSourceScan = false;
+                OnPropertyChanged(nameof(IsLoadingInitial));
+
+                lock (_pendingLock) _pendingFiles.Clear();
+                _allFiles.Clear();
+                _currentIndex = 0;
+                ScanCount     = 0;
+                IsScanning    = false;
+                ResetStats();
+
+                _allFiles.AddRange(cached.Value.Files);
+                ScanCount          = _allFiles.Count;
+                _filteredTotalSize = _allFiles.Sum(f => f.Size);
+                SortFiles();
+                RefreshCurrentCards();
+
+                OnPropertyChanged(nameof(IsComplete));
+                OnPropertyChanged(nameof(AllFiles));
+                OnPropertyChanged(nameof(QueueInfo));
+                OnPropertyChanged(nameof(ScanStatusText));
+
+                LoadedFromCache = true;
+                CacheAgeText    = ScanCacheService.FormatAge(cached.Value.ScannedAt);
+
+                if (!IsMtpSource) TryRestoreSession();
+
+                _ = Task.Run(() =>
+                {
+                    try { DuplicateDetector.MarkDuplicates(_allFiles, CancellationToken.None); }
+                    catch { }
+                    Application.Current.Dispatcher.BeginInvoke(() =>
+                    {
+                        var tmp = _currentFile; _currentFile = null;
+                        OnPropertyChanged(nameof(CurrentFile)); OnPropertyChanged(nameof(HasCurrentFile));
+                        _currentFile = tmp;
+                        OnPropertyChanged(nameof(CurrentFile)); OnPropertyChanged(nameof(HasCurrentFile));
+                    });
+                });
+                return;
+            }
+        }
+
+        // ── Cache miss — run a fresh scan ──────────────────────────────────────
+        LoadedFromCache      = false;
+        CacheAgeText         = string.Empty;
+        _isInitialSourceScan = isSourceChange;   // show overlay only for new sources
+        OnPropertyChanged(nameof(IsLoadingInitial));
 
         // Cancel any in-progress scan
         _scanCts?.Cancel();
@@ -490,7 +591,13 @@ public class MainViewModel : INotifyPropertyChanged
         }
 
         FlushPendingFiles(); // final flush
-        IsScanning = false;
+        IsScanning           = false;
+        _isInitialSourceScan = false;
+        OnPropertyChanged(nameof(IsLoadingInitial));
+
+        // Save to cache when using default filters (full unfiltered list)
+        if (!ct.IsCancellationRequested && isDefaultFilters && _allFiles.Count > 0)
+            ScanCacheService.SaveAsync(newCacheKey, _allFiles.ToList());
 
         // Restore session (only for local folders)
         if (!IsMtpSource) TryRestoreSession();
@@ -526,6 +633,25 @@ public class MainViewModel : INotifyPropertyChanged
         IsMtpSource    = true;
         FolderPath     = folderPath;
         LoadFiles();
+    }
+
+    /// <summary>Invalidates the cache for the current source and triggers a fresh scan.</summary>
+    private void RefreshScan()
+    {
+        if (!HasFolder) return;
+        var key = ScanCacheService.MakeCacheKey(FolderPath, _mtpDeviceId);
+        ScanCacheService.Invalidate(key);
+        _currentCacheKey = string.Empty;  // force source-change detection
+        LoadFiles();
+    }
+
+    /// <summary>Cancels an in-progress scan and hides the loading overlay.</summary>
+    private void CancelScan()
+    {
+        _scanCts?.Cancel();
+        _isInitialSourceScan = false;
+        IsScanning = false;
+        OnPropertyChanged(nameof(IsLoadingInitial));
     }
 
     private void FlushPendingFiles()

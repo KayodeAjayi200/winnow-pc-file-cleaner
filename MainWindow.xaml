@@ -23,6 +23,7 @@
             <RowDefinition Height="Auto"/>  <!-- folder picker -->
             <RowDefinition Height="Auto"/>  <!-- filter bar -->
             <RowDefinition Height="Auto"/>  <!-- session banner -->
+            <RowDefinition Height="Auto"/>  <!-- cache banner -->
             <RowDefinition Height="*"/>     <!-- main area -->
         </Grid.RowDefinitions>
 
@@ -200,9 +201,9 @@
 
                 <Button Grid.Column="4"
                         Style="{StaticResource BaseButtonStyle}"
-                        Command="{Binding ReloadCommand}"
-                        ToolTip="Reload with current filters"
-                        AutomationProperties.Name="Reload with current filters"
+                        Command="{Binding RefreshCommand}"
+                        ToolTip="Re-scan folder (clears cache)"
+                        AutomationProperties.Name="Re-scan folder"
                         Visibility="{Binding HasFolder, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="↺ Reload"/>
                 </Button>
@@ -430,8 +431,37 @@
             </Grid>
         </Border>
 
+        <!-- ════════════════  CACHE BANNER  ════════════════════════════ -->
+        <Border Grid.Row="5"
+                Background="#1410B981"
+                BorderBrush="#2810B981"
+                BorderThickness="0,0,0,1"
+                Padding="24,6"
+                Visibility="{Binding ShowCacheBanner, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="⚡" FontSize="13" Margin="0,0,6,0"
+                               FontFamily="Segoe UI Emoji" VerticalAlignment="Center"/>
+                    <TextBlock FontSize="12" VerticalAlignment="Center">
+                        <Run Text="Loaded from cache" Foreground="#6EE7B7" FontWeight="SemiBold"/>
+                        <Run Text=" · scanned " Foreground="#5CA08A"/>
+                        <Run Text="{Binding CacheAgeText, Mode=OneWay}" Foreground="#6EE7B7"/>
+                    </TextBlock>
+                </StackPanel>
+                <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Background="Transparent" BorderThickness="0"
+                        Cursor="Hand" Padding="4"
+                        Command="{Binding RefreshCommand}"
+                        ToolTip="Re-scan now (clears cache)">
+                    <TextBlock Text="↺ Re-scan" FontSize="12"
+                               Foreground="#5CA08A"
+                               TextDecorations="Underline"/>
+                </Button>
+            </Grid>
+        </Border>
+
         <!-- ════════════════  MAIN AREA  ════════════════════════════ -->
-        <Grid Grid.Row="5" Margin="24">
+        <Grid Grid.Row="6" Margin="24">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="280"/>
@@ -705,5 +735,109 @@
 
             </StackPanel>
         </Grid>
+
+        <!-- ════════════  INITIAL SCAN OVERLAY  ════════════════════════
+             Shown while scanning a NEW source for the first time.
+             Blocks interaction until the full file list is ready.
+        ════════════════════════════════════════════════════════════════ -->
+        <Grid Grid.Row="2" Grid.RowSpan="5"
+              Panel.ZIndex="20"
+              Visibility="{Binding IsLoadingInitial, Converter={StaticResource BoolToVis}}">
+            <!-- Frosted dark backdrop -->
+            <Border Background="#E81A1A2E"/>
+
+            <!-- Centred card -->
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{StaticResource BgSurfaceBrush}"
+                    BorderBrush="#7C3AED"
+                    BorderThickness="1"
+                    CornerRadius="16"
+                    Padding="48,40"
+                    MinWidth="360">
+                <StackPanel HorizontalAlignment="Center">
+
+                    <!-- Animated spinner ring -->
+                    <Grid Width="64" Height="64" HorizontalAlignment="Center" Margin="0,0,0,24">
+                        <Ellipse Width="64" Height="64"
+                                 Stroke="#2A7C3AED" StrokeThickness="6"/>
+                        <Ellipse x:Name="SpinnerArc"
+                                 Width="64" Height="64"
+                                 Stroke="#7C3AED" StrokeThickness="6"
+                                 StrokeDashArray="25 75"
+                                 RenderTransformOrigin="0.5,0.5">
+                            <Ellipse.RenderTransform>
+                                <RotateTransform x:Name="SpinnerRotate"/>
+                            </Ellipse.RenderTransform>
+                            <Ellipse.Triggers>
+                                <EventTrigger RoutedEvent="Loaded">
+                                    <BeginStoryboard>
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="SpinnerRotate"
+                                                Storyboard.TargetProperty="Angle"
+                                                From="0" To="360"
+                                                Duration="0:0:1"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </EventTrigger>
+                            </Ellipse.Triggers>
+                        </Ellipse>
+                    </Grid>
+
+                    <!-- Source name -->
+                    <TextBlock Text="{Binding ScanSourceText}"
+                               FontSize="18" FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               TextWrapping="Wrap" TextAlignment="Center"
+                               MaxWidth="300"
+                               Margin="0,0,0,6"/>
+
+                    <!-- Subtitle -->
+                    <TextBlock Text="Scanning your files…"
+                               FontSize="13"
+                               HorizontalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,0,0,20"/>
+
+                    <!-- Live progress counts -->
+                    <Border Background="#1A7C3AED" CornerRadius="8" Padding="16,10" Margin="0,0,0,20">
+                        <TextBlock Text="{Binding ScanStatusText}"
+                                   FontSize="13"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{StaticResource AccentBrandBrush}"
+                                   FontWeight="SemiBold"/>
+                    </Border>
+
+                    <!-- Indeterminate progress bar -->
+                    <ProgressBar IsIndeterminate="True"
+                                 Height="4"
+                                 Width="260"
+                                 Margin="0,0,0,24"
+                                 BorderThickness="0"
+                                 Foreground="#7C3AED"
+                                 Background="#2A2A44"/>
+
+                    <!-- Cancel button -->
+                    <Button Command="{Binding CancelScanCommand}"
+                            HorizontalAlignment="Center"
+                            Padding="20,8"
+                            Cursor="Hand">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderBrush"  Value="{StaticResource BorderSubtleBrush}"/>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="✕ " FontFamily="Segoe UI Emoji"/>
+                            <TextBlock Text="Cancel"/>
+                        </StackPanel>
+                    </Button>
+
+                </StackPanel>
+            </Border>
+        </Grid>
+
     </Grid>
 </Window>
