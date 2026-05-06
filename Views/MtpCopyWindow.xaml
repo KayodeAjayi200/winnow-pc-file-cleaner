@@ -147,10 +147,33 @@
             <Grid>
                 <!-- Loading indicator -->
                 <StackPanel x:Name="LoadingPanel"
-                            HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="Calculating folder sizes…"
-                               Foreground="#888" FontSize="13"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            MinWidth="220">
+                    <ProgressBar IsIndeterminate="True"
+                                 Height="4" Margin="0,0,0,12"
+                                 Background="#333" Foreground="#4ade80"
+                                 BorderThickness="0">
+                        <ProgressBar.Template>
+                            <ControlTemplate TargetType="ProgressBar">
+                                <Border Background="#333" CornerRadius="2" ClipToBounds="True">
+                                    <Border x:Name="PART_Track">
+                                        <Border x:Name="PART_Indicator"
+                                                Background="#4ade80" CornerRadius="2"
+                                                HorizontalAlignment="Left"/>
+                                    </Border>
+                                </Border>
+                            </ControlTemplate>
+                        </ProgressBar.Template>
+                    </ProgressBar>
+                    <TextBlock x:Name="LoadingText"
+                               Text="Connecting to device…"
+                               Foreground="#aaa" FontSize="13"
                                HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="LoadingSubText"
+                               Text=""
+                               Foreground="#666" FontSize="11"
+                               HorizontalAlignment="Center"
+                               Margin="0,4,0,0"/>
                 </StackPanel>
 
                 <!-- Folder list -->

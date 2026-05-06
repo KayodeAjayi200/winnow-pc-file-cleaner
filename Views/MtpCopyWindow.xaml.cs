@@ -89,6 +89,12 @@ public partial class MtpCopyWindow : Window
 
     private CancellationTokenSource? _sizeCts;
 
+    private void SetLoadingStatus(string main, string sub = "")
+    {
+        LoadingText.Text    = main;
+        LoadingSubText.Text = sub;
+    }
+
     private async Task LoadFoldersAsync()
     {
         _sizeCts?.Cancel();
@@ -100,37 +106,66 @@ public partial class MtpCopyWindow : Window
         EmptyText.Visibility          = Visibility.Collapsed;
         CopyBtn.IsEnabled             = false;
         _folders.Clear();
+        SetLoadingStatus("Connecting to device…", "Pausing any active scan");
 
-        // ── Phase 1: list folder names immediately ────────────────────────────
-        try
+        // ── Phase 1: list folder names (with retry in case device is busy) ────
+        List<MtpFolderInfo>? infos = null;
+        Exception? lastEx = null;
+        const int maxAttempts = 4;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var infos = await MtpDeviceService.GetSubfoldersQuickAsync(
-                _deviceId, _sourcePath, sizeCt);
+            if (sizeCt.IsCancellationRequested) return;
 
-            _folders.Clear();
-            foreach (var info in infos.OrderByDescending(i => i.Name))
-                _folders.Add(new FolderItem { Path = info.Path, DisplayName = info.Name });
-
-            LoadingPanel.Visibility = Visibility.Collapsed;
-
-            if (_folders.Count == 0)
+            if (attempt > 1)
             {
-                EmptyText.Visibility = Visibility.Visible;
-                return;
+                SetLoadingStatus(
+                    $"Retrying… (attempt {attempt}/{maxAttempts})",
+                    "Device may be busy — waiting");
+                await Task.Delay(1500 * attempt, sizeCt).ConfigureAwait(false);
+            }
+            else
+            {
+                SetLoadingStatus("Connecting to device…", "Pausing any active scan");
             }
 
-            FolderScrollViewer.Visibility = Visibility.Visible;
-            UpdateSummary();
-            RefreshCopyBtn();
+            try
+            {
+                infos = await MtpDeviceService.GetSubfoldersQuickAsync(
+                    _deviceId, _sourcePath, sizeCt);
+                lastEx = null;
+                break;   // success
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex) { lastEx = ex; }
         }
-        catch (OperationCanceledException) { return; }
-        catch (Exception ex)
+
+        if (infos == null)
         {
             LoadingPanel.Visibility = Visibility.Collapsed;
-            EmptyText.Text          = $"Error loading folders: {ex.Message}";
+            EmptyText.Text          = lastEx != null
+                ? $"Could not connect to device:\n{lastEx.Message}"
+                : "Could not list folders. Try closing and reopening this dialog.";
             EmptyText.Visibility    = Visibility.Visible;
             return;
         }
+
+        SetLoadingStatus("Loading folders…");
+        _folders.Clear();
+        foreach (var info in infos.OrderByDescending(i => i.Name))
+            _folders.Add(new FolderItem { Path = info.Path, DisplayName = info.Name });
+
+        LoadingPanel.Visibility = Visibility.Collapsed;
+
+        if (_folders.Count == 0)
+        {
+            EmptyText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        FolderScrollViewer.Visibility = Visibility.Visible;
+        UpdateSummary();
+        RefreshCopyBtn();
 
         // ── Phase 2: calculate sizes in the background (non-blocking) ─────────
         var folderMap = _folders.ToDictionary(f => f.Path);

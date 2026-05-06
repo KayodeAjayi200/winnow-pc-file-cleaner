@@ -171,7 +171,8 @@ public static class MtpDeviceService
         {
             await BeforeExclusiveDeviceAccess.Invoke();
             // Give the scanner's STA thread time to see the cancellation and disconnect.
-            await Task.Delay(900, ct);
+            // 2 s is conservative but necessary for large MTP file batches.
+            await Task.Delay(2000, ct);
         }
     }
 
