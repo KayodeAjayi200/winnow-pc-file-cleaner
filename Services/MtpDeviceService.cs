@@ -110,48 +110,72 @@ public static class MtpDeviceService
     {
         var cutoff = GetDateCutoff(dateFilter);
 
-        await RunSta(() =>
+        // Acquire the device mutex for the entire scan so exclusive ops know when
+        // it's safe to open a competing connection.
+        await _deviceSemaphore.WaitAsync(ct);
+        try
         {
-            using var device = OpenDevice(deviceId);
-            try
+            await RunSta(() =>
             {
-                var searchOption = recursive
-                    ? SearchOption.AllDirectories
-                    : SearchOption.TopDirectoryOnly;
-
-                foreach (var file in device.EnumerateFiles(path, "*", searchOption))
+                using var device = OpenDevice(deviceId);
+                try
                 {
-                    ct.ThrowIfCancellationRequested();
-                    try
+                    var searchOption = recursive
+                        ? SearchOption.AllDirectories
+                        : SearchOption.TopDirectoryOnly;
+
+                    foreach (var file in device.EnumerateFiles(path, "*", searchOption))
                     {
-                        var info     = device.GetFileInfo(file);
-                        var category = FileScanner.ClassifyExtension(
-                            System.IO.Path.GetExtension(info.Name));
-
-                        if (typeFilter != FileTypeCategory.All && category != typeFilter)
-                            continue;
-                        if (cutoff.HasValue && info.LastWriteTime < cutoff.Value)
-                            continue;
-
-                        onFile(new FileItem
+                        ct.ThrowIfCancellationRequested();
+                        try
                         {
-                            Name         = info.Name,
-                            FullPath     = info.FullName,   // WPD virtual path
-                            Size         = (long)info.Length,
-                            LastModified = info.LastWriteTime ?? DateTime.MinValue,
-                            Category     = category,
-                            IsMtp        = true,
-                            MtpDeviceId  = deviceId,
-                            MtpObjectId  = info.FullName   // use full path as stable ID
-                        });
+                            var info     = device.GetFileInfo(file);
+                            var category = FileScanner.ClassifyExtension(
+                                System.IO.Path.GetExtension(info.Name));
+
+                            if (typeFilter != FileTypeCategory.All && category != typeFilter)
+                                continue;
+                            if (cutoff.HasValue && info.LastWriteTime < cutoff.Value)
+                                continue;
+
+                            onFile(new FileItem
+                            {
+                                Name         = info.Name,
+                                FullPath     = info.FullName,
+                                Size         = (long)info.Length,
+                                LastModified = info.LastWriteTime ?? DateTime.MinValue,
+                                Category     = category,
+                                IsMtp        = true,
+                                MtpDeviceId  = deviceId,
+                                MtpObjectId  = info.FullName
+                            });
+                        }
+                        catch { /* skip inaccessible */ }
                     }
-                    catch { /* skip inaccessible */ }
                 }
-            }
-            catch (OperationCanceledException) { }
-            catch { }
-        }, ct);
+                catch (OperationCanceledException) { }
+                catch { }
+            }, ct);
+        }
+        finally
+        {
+            _deviceSemaphore.Release();
+        }
     }
+
+    // ── Device mutex ─────────────────────────────────────────────────────────
+    //
+    // iPhones (and most MTP devices) only allow ONE WPD connection at a time.
+    // _deviceSemaphore is a mutex that every device operation must acquire before
+    // opening a connection and release after closing it.
+    //
+    // ScanAsync holds it for the entire scan.
+    // Exclusive ops (download, backup listing, copy) acquire it via YieldDeviceAsync
+    // which first fires BeforeExclusiveDeviceAccess (cancels the scan) then WAITS
+    // until the semaphore is actually free — i.e. until the scan has truly closed
+    // its device connection — rather than using a blind delay.
+
+    private static readonly SemaphoreSlim _deviceSemaphore = new(1, 1);
 
     // ── Download / Preview ────────────────────────────────────────────────────
 
@@ -159,21 +183,32 @@ public static class MtpDeviceService
         System.IO.Path.Combine(System.IO.Path.GetTempPath(), "winnow_preview");
 
     /// <summary>
-    /// Raised just before an exclusive MTP operation (download, backup folder listing)
-    /// needs sole access to the device.  Subscribers should cancel any active scan
-    /// and return only after the scan's STA thread has had time to release the device.
+    /// Raised just before an exclusive MTP operation needs sole device access.
+    /// Subscribers should cancel any active scan and return immediately.
+    /// YieldDeviceAsync will block until the semaphore confirms the scan released the device.
     /// </summary>
     public static event Func<Task>? BeforeExclusiveDeviceAccess;
 
+    /// <summary>
+    /// Cancels any active scan then acquires the device semaphore, guaranteeing
+    /// the device connection has been released before returning.
+    /// The caller MUST release _deviceSemaphore in a finally block after use.
+    /// </summary>
     private static async Task YieldDeviceAsync(CancellationToken ct = default)
     {
+        // Ask the scanner to cancel
         if (BeforeExclusiveDeviceAccess != null)
-        {
             await BeforeExclusiveDeviceAccess.Invoke();
-            // Give the scanner's STA thread time to see the cancellation and disconnect.
-            // 2 s is conservative but necessary for large MTP file batches.
-            await Task.Delay(2000, ct);
+
+        // Block until the device is actually free (scan has closed its connection).
+        // 20 s timeout handles pathological cases (very slow COM calls on the STA).
+        bool acquired = await _deviceSemaphore.WaitAsync(20_000, ct);
+        if (!acquired)
+        {
+            // Device didn't free up in time — attempt anyway; worst case the
+            // retry loop in the caller will try again.
         }
+        // Semaphore is now held by this caller; it must Release() in a finally.
     }
 
     /// <summary>
@@ -209,28 +244,34 @@ public static class MtpDeviceService
         IProgress<(long written, long total)>? progress = null,
         CancellationToken ct = default)
     {
-        // Release any active scan so we get sole access to the device
+        // Cancels any active scan and acquires _deviceSemaphore
         await YieldDeviceAsync(ct);
-
-        return await RunStaFresh<string?>(() =>
+        try
         {
-            try
+            return await RunStaFresh<string?>(() =>
             {
-                Directory.CreateDirectory(TempDir);
-                CleanTempFiles(3);
+                try
+                {
+                    Directory.CreateDirectory(TempDir);
+                    CleanTempFiles(3);
 
-                var ext      = System.IO.Path.GetExtension(mtpPath);
-                var tempFile = System.IO.Path.Combine(TempDir, $"preview_{Guid.NewGuid():N}{ext}");
+                    var ext      = System.IO.Path.GetExtension(mtpPath);
+                    var tempFile = System.IO.Path.Combine(TempDir, $"preview_{Guid.NewGuid():N}{ext}");
 
-                using var device = OpenDevice(deviceId);
-                using var fsOut  = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 131072);
-                using var prog   = new ProgressStream(fsOut, fileSize, progress, ct);
-                device.DownloadFile(mtpPath, prog);
-                return tempFile;
-            }
-            catch (OperationCanceledException) { return null; }
-            catch { return null; }
-        }, ct);
+                    using var device = OpenDevice(deviceId);
+                    using var fsOut  = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 131072);
+                    using var prog   = new ProgressStream(fsOut, fileSize, progress, ct);
+                    device.DownloadFile(mtpPath, prog);
+                    return tempFile;
+                }
+                catch (OperationCanceledException) { return null; }
+                catch { return null; }
+            }, ct);
+        }
+        finally
+        {
+            _deviceSemaphore.Release();
+        }
     }
 
     /// <summary>
@@ -322,21 +363,26 @@ public static class MtpDeviceService
     public static async Task<List<MtpFolderInfo>> GetSubfoldersQuickAsync(
         string deviceId, string path, CancellationToken ct = default)
     {
-        // Yield device so a concurrent scan can release its connection first
         await YieldDeviceAsync(ct);
-
-        return await RunStaFresh<List<MtpFolderInfo>>(() =>
+        try
         {
-            using var device = OpenDevice(deviceId);
-            var dir = device.GetDirectoryInfo(path);
-            var result = new List<MtpFolderInfo>();
-            foreach (var sub in dir.EnumerateDirectories())
+            return await RunStaFresh<List<MtpFolderInfo>>(() =>
             {
-                ct.ThrowIfCancellationRequested();
-                result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
-            }
-            return result;
-        }, ct);
+                using var device = OpenDevice(deviceId);
+                var dir = device.GetDirectoryInfo(path);
+                var result = new List<MtpFolderInfo>();
+                foreach (var sub in dir.EnumerateDirectories())
+                {
+                    ct.ThrowIfCancellationRequested();
+                    result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
+                }
+                return result;
+            }, ct);
+        }
+        finally
+        {
+            _deviceSemaphore.Release();
+        }
     }
 
     /// <summary>
@@ -350,29 +396,37 @@ public static class MtpDeviceService
         Action<string, long, int> onFolderSized,
         CancellationToken ct = default)
     {
-        await RunStaFreshVoid(() =>
+        await _deviceSemaphore.WaitAsync(ct);
+        try
         {
-            using var device = OpenDevice(deviceId);
-            foreach (var folderPath in folderPaths)
+            await RunStaFreshVoid(() =>
             {
-                ct.ThrowIfCancellationRequested();
-                long size  = 0;
-                int  count = 0;
-                try
+                using var device = OpenDevice(deviceId);
+                foreach (var folderPath in folderPaths)
                 {
-                    foreach (var f in device.EnumerateFiles(folderPath, "*", SearchOption.AllDirectories))
+                    ct.ThrowIfCancellationRequested();
+                    long size  = 0;
+                    int  count = 0;
+                    try
                     {
-                        ct.ThrowIfCancellationRequested();
-                        try { var fi = device.GetFileInfo(f); size += (long)fi.Length; count++; }
-                        catch { }
+                        foreach (var f in device.EnumerateFiles(folderPath, "*", SearchOption.AllDirectories))
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            try { var fi = device.GetFileInfo(f); size += (long)fi.Length; count++; }
+                            catch { }
+                        }
                     }
-                }
-                catch (OperationCanceledException) { throw; }
-                catch { }
+                    catch (OperationCanceledException) { throw; }
+                    catch { }
 
-                onFolderSized(folderPath, size, count);
-            }
-        }, ct);
+                    onFolderSized(folderPath, size, count);
+                }
+            }, ct);
+        }
+        finally
+        {
+            _deviceSemaphore.Release();
+        }
     }
 
     // ── Copy to PC ────────────────────────────────────────────────────────────
@@ -393,32 +447,41 @@ public static class MtpDeviceService
         IProgress<CopyProgress>? progress,
         CancellationToken       ct = default)
     {
-        // ── Phase 1: Enumerate all files (single connection) ──────────────────
-        var files = await RunSta(() =>
+        // ── Phase 1: Enumerate all files ──────────────────────────────────────
+        await _deviceSemaphore.WaitAsync(ct);
+        List<(string mtpFile, long size)> files;
+        try
         {
-            using var device = OpenDevice(deviceId);
-            var list = new List<(string mtpFile, long size)>();
-            foreach (var folder in mtpFolderPaths)
+            files = await RunSta(() =>
             {
-                ct.ThrowIfCancellationRequested();
-                try
+                using var device = OpenDevice(deviceId);
+                var list = new List<(string mtpFile, long size)>();
+                foreach (var folder in mtpFolderPaths)
                 {
-                    foreach (var f in device.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+                    ct.ThrowIfCancellationRequested();
+                    try
                     {
-                        ct.ThrowIfCancellationRequested();
-                        try
+                        foreach (var f in device.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
                         {
-                            var info = device.GetFileInfo(f);
-                            list.Add((f, (long)info.Length));
+                            ct.ThrowIfCancellationRequested();
+                            try
+                            {
+                                var info = device.GetFileInfo(f);
+                                list.Add((f, (long)info.Length));
+                            }
+                            catch { list.Add((f, 0)); }
                         }
-                        catch { list.Add((f, 0)); }
                     }
+                    catch (OperationCanceledException) { throw; }
+                    catch { }
                 }
-                catch (OperationCanceledException) { throw; }
-                catch { }
-            }
-            return list;
-        });
+                return list;
+            });
+        }
+        finally
+        {
+            _deviceSemaphore.Release();
+        }
 
         long totalBytes = files.Sum(f => f.size);
         int  totalCount = files.Count;
@@ -428,11 +491,6 @@ public static class MtpDeviceService
         var  startTime  = DateTime.UtcNow;
 
         // ── Phase 2: Pipeline copy ────────────────────────────────────────────
-        // Producer (STA thread): downloads each file into memory, pushes to channel.
-        // Consumer (caller thread): reads from channel, writes bytes to disk async.
-        // Channel capacity of 4 provides back-pressure and caps peak memory use.
-        // Keeping one device open for the whole batch avoids per-file Connect overhead.
-
         var channel = System.Threading.Channels.Channel.CreateBounded<
             (string? localPath, byte[]? data, long fileSize, string fileName)>(
             new System.Threading.Channels.BoundedChannelOptions(4)
@@ -442,44 +500,52 @@ public static class MtpDeviceService
                 SingleWriter = true,
             });
 
-        // Producer: runs on the persistent STA thread with a single device connection.
+        // Producer: acquire device mutex for the entire copy batch.
+        await _deviceSemaphore.WaitAsync(ct);
         var producer = RunSta(() =>
         {
-            using var device = OpenDevice(deviceId);
             try
             {
-                foreach (var (mtpFile, fileSize) in files)
+                using var device = OpenDevice(deviceId);
+                try
                 {
-                    if (ct.IsCancellationRequested) break;
-
-                    string localPath = BuildLocalPath(localDestRoot, mtpFile);
-                    string fileName  = System.IO.Path.GetFileName(mtpFile);
-
-                    if (skipExisting && System.IO.File.Exists(localPath))
+                    foreach (var (mtpFile, fileSize) in files)
                     {
-                        channel.Writer.WriteAsync((null, null, fileSize, fileName))
-                                      .AsTask().GetAwaiter().GetResult();
-                        continue;
-                    }
+                        if (ct.IsCancellationRequested) break;
 
-                    try
-                    {
-                        var ms = new System.IO.MemoryStream((int)Math.Max(fileSize, 1024));
-                        device.DownloadFile(mtpFile, ms);
-                        channel.Writer.WriteAsync((localPath, ms.ToArray(), fileSize, fileName))
-                                      .AsTask().GetAwaiter().GetResult();
+                        string localPath = BuildLocalPath(localDestRoot, mtpFile);
+                        string fileName  = System.IO.Path.GetFileName(mtpFile);
+
+                        if (skipExisting && System.IO.File.Exists(localPath))
+                        {
+                            channel.Writer.WriteAsync((null, null, fileSize, fileName))
+                                          .AsTask().GetAwaiter().GetResult();
+                            continue;
+                        }
+
+                        try
+                        {
+                            var ms = new System.IO.MemoryStream((int)Math.Max(fileSize, 1024));
+                            device.DownloadFile(mtpFile, ms);
+                            channel.Writer.WriteAsync((localPath, ms.ToArray(), fileSize, fileName))
+                                          .AsTask().GetAwaiter().GetResult();
+                        }
+                        catch
+                        {
+                            System.Threading.Interlocked.Increment(ref errorCount);
+                            channel.Writer.WriteAsync((null, null, fileSize, fileName))
+                                          .AsTask().GetAwaiter().GetResult();
+                        }
                     }
-                    catch
-                    {
-                        System.Threading.Interlocked.Increment(ref errorCount);
-                        channel.Writer.WriteAsync((null, null, fileSize, fileName))
-                                      .AsTask().GetAwaiter().GetResult();
-                    }
+                }
+                finally
+                {
+                    channel.Writer.Complete();
                 }
             }
             finally
             {
-                channel.Writer.Complete();
+                _deviceSemaphore.Release();
             }
         });
 
