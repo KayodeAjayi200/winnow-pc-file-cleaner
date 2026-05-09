@@ -226,6 +226,26 @@ public partial class MainWindow : Window
         return menu;
     }
 
+    private void BrowseButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vm.IsMtpSource && _vm.MtpDeviceId != null)
+        {
+            // Browse device folders instead of local PC folders
+            var win = new Views.MtpFolderInputDialog(_vm.MtpDeviceId, _vm.FolderPath) { Owner = this };
+            if (win.ShowDialog() == true && win.SelectedPaths.Count > 0)
+            {
+                // Use the first selected path as the new root folder to swipe
+                var newPath = win.SelectedPaths[0];
+                _vm.LoadMtpFiles(_vm.MtpDeviceId, newPath, _vm.MtpDeviceName ?? "Device");
+            }
+        }
+        else
+        {
+            _vm.BrowseFolderCommand.Execute(null);
+        }
+        CardStack.Focus();
+    }
+
     private void BrowseDeviceButton_Click(object sender, RoutedEventArgs e)
     {
         var picker = new Views.MtpDevicePickerWindow { Owner = this };
