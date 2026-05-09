@@ -155,7 +155,7 @@ public partial class MtpDevicePickerWindow : Window
         _ = Task.Delay(1000, ct).ContinueWith(_ =>
         {
             if (!ct.IsCancellationRequested)
-                Dispatcher.BeginInvoke(() => FolderLoadingText.Text = "Still connecting to device…");
+                Dispatcher.BeginInvoke(() => FolderLoadingText.Text = "Waiting for scan to pause…");
         }, TaskScheduler.Default);
 
         List<MtpFolderInfo> folderInfos;

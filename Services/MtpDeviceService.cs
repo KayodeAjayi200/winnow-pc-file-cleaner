@@ -403,51 +403,63 @@ public static class MtpDeviceService
     public static async Task<List<MtpFolderInfo>> GetFoldersQuickAsync(
         string deviceId, string path, CancellationToken ct = default)
     {
-        // Browse is read-only — do NOT fire BeforeExclusiveDeviceAccess (that would cancel
-        // an active scan and cause the device to disconnect briefly). Just open directly
-        // on a fresh STA thread. Retry up to 4 times to handle transient WPD issues.
-        Exception? lastEx = null;
-        int[] delays = [0, 600, 1200, 2000];
-        foreach (int delay in delays)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (delay > 0) await Task.Delay(delay, ct);
-            try
-            {
-                return await RunStaFresh<List<MtpFolderInfo>>(() =>
-                {
-                    using var device = OpenDeviceQuiet(deviceId)
-                        ?? throw new InvalidOperationException(
-                            "Device not found. Make sure it is connected, unlocked, and trusted.");
-                    IEnumerable<MediaDevices.MediaDirectoryInfo> dirs = string.IsNullOrEmpty(path)
-                        ? device.GetRootDirectory().EnumerateDirectories()
-                        : device.GetDirectoryInfo(path).EnumerateDirectories();
-                    var result = new List<MtpFolderInfo>();
-                    foreach (var sub in dirs)
-                    {
-                        ct.ThrowIfCancellationRequested();
-                        result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
-                    }
-                    return result;
-                }, ct);
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex) { lastEx = ex; }
-        }
-        throw lastEx!;
-    }
-
-    /// <summary>Opens a device without throwing — returns null if not found.</summary>
-    private static MediaDevice? OpenDeviceQuiet(string deviceId)
-    {
+        // iPhones (and most MTP devices) allow only ONE WPD connection at a time.
+        // We must have exclusive access before opening the device.
+        // Cancel any active scan and wait for it to release the semaphore — this is
+        // the only safe way to get a connection while a scan may be running.
+        bool acquired = await YieldDeviceAsync(ct);
+        if (!acquired) return [];
         try
         {
-            var dev = MediaDevice.GetDevices().FirstOrDefault(d => d.DeviceId == deviceId);
-            if (dev == null) return null;
-            dev.Connect();
-            return dev;
+            return await RunStaFresh<List<MtpFolderInfo>>(() =>
+            {
+                // After the scan closes its connection the device may briefly
+                // disappear from WPD while iOS renegotiates with Windows.
+                // Retry with generous back-off (up to ~10 s total).
+                int[] retryDelaysMs = [0, 1000, 2000, 3000, 4000];
+                Exception? lastEx = null;
+                foreach (int delay in retryDelaysMs)
+                {
+                    if (delay > 0) Thread.Sleep(delay);
+                    if (ct.IsCancellationRequested) throw new OperationCanceledException(ct);
+                    try
+                    {
+                        var dev = MediaDevice.GetDevices()
+                            .FirstOrDefault(d => d.DeviceId == deviceId);
+                        if (dev == null)
+                        {
+                            lastEx = new InvalidOperationException(
+                                "Device not found. Make sure it is connected, unlocked, and trusted.");
+                            continue;
+                        }
+                        dev.Connect();
+                        using (dev)
+                        {
+                            IEnumerable<MediaDevices.MediaDirectoryInfo> dirs =
+                                string.IsNullOrEmpty(path)
+                                    ? dev.GetRootDirectory().EnumerateDirectories()
+                                    : dev.GetDirectoryInfo(path).EnumerateDirectories();
+                            var result = new List<MtpFolderInfo>();
+                            foreach (var sub in dirs)
+                            {
+                                if (ct.IsCancellationRequested)
+                                    throw new OperationCanceledException(ct);
+                                result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
+                            }
+                            return result;
+                        }
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex) { lastEx = ex; }
+                }
+                throw lastEx ?? new InvalidOperationException(
+                    "Device not found. Make sure it is connected, unlocked, and trusted.");
+            }, ct);
         }
-        catch { return null; }
+        finally
+        {
+            _deviceSemaphore.Release();
+        }
     }
 
     /// <summary>
