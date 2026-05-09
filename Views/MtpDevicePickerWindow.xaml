@@ -121,51 +121,144 @@
                 </Grid>
             </DockPanel>
 
-            <!-- Folder tree -->
-            <DockPanel Grid.Column="2">
-                <TextBlock DockPanel.Dock="Top" Text="FOLDERS"
-                           FontSize="10" Foreground="#888"
-                           Margin="0,0,0,6" FontWeight="SemiBold"/>
+        <!-- Folder browser (flat list with breadcrumb + checkboxes) -->
+        <DockPanel Grid.Column="2">
+            <TextBlock DockPanel.Dock="Top" Text="FOLDERS"
+                       FontSize="10" Foreground="#888"
+                       Margin="0,0,0,6" FontWeight="SemiBold"/>
+
+            <!-- Breadcrumb + Up — hidden until device selected -->
+            <Border x:Name="BreadcrumbBar"
+                    DockPanel.Dock="Top"
+                    Background="#12122a"
+                    BorderBrush="#2a2a45"
+                    BorderThickness="1,1,1,0"
+                    Padding="8,5"
+                    Visibility="Collapsed">
+                <DockPanel>
+                    <Button x:Name="FolderUpBtn"
+                            DockPanel.Dock="Right"
+                            Content="↑ Up"
+                            FontSize="11"
+                            Padding="8,4"
+                            Margin="6,0,0,0"
+                            IsEnabled="False"
+                            Click="FolderUp_Click"
+                            Style="{StaticResource ActionBtn}"
+                            Background="#2a2a45"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="FolderBreadcrumb" VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="{Binding Label}"
+                                                Tag="{Binding}"
+                                                Click="FolderBreadcrumb_Click"
+                                                FontSize="11"
+                                                Foreground="#a0a0c0"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Padding="2,0"
+                                                Cursor="Hand"/>
+                                        <TextBlock Text=" ›" Foreground="#444466"
+                                                   FontSize="12" VerticalAlignment="Center"
+                                                   Margin="2,0"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- Folder list area -->
+            <Border BorderBrush="#2A2A3A" BorderThickness="1"
+                    Background="#1A1A2E">
                 <Grid>
-                    <TreeView x:Name="FolderTree"
-                              Background="#1A1A2E"
-                              BorderBrush="#2A2A3A"
-                              BorderThickness="1"
-                              Foreground="White"
-                              SelectedItemChanged="FolderTree_SelectedItemChanged">
-                        <TreeView.ItemContainerStyle>
-                            <Style TargetType="TreeViewItem">
-                                <Setter Property="Foreground" Value="White"/>
-                                <Setter Property="Background" Value="Transparent"/>
-                                <Setter Property="Padding" Value="4,3"/>
-                                <Setter Property="Cursor" Value="Hand"/>
-                                <Setter Property="HeaderTemplate">
-                                    <Setter.Value>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding}" Foreground="White"/>
-                                        </DataTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                                <EventSetter Event="Expanded" Handler="TreeViewItem_Expanded"/>
-                                <Style.Triggers>
-                                    <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="#7C3AED"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TreeView.ItemContainerStyle>
-                        <TreeView.ItemTemplate>
-                            <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                                <TextBlock Text="{Binding Header}" Foreground="White"/>
-                            </HierarchicalDataTemplate>
-                        </TreeView.ItemTemplate>
-                    </TreeView>
+                    <!-- Hint shown before device selected -->
                     <TextBlock x:Name="FolderHint"
                                Text="← Select a device to see its folders"
                                Foreground="#666" FontSize="11"
                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+                    <!-- Loading spinner -->
+                    <StackPanel x:Name="FolderLoadingPanel"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="Collapsed">
+                        <TextBlock Text="⏳  Loading…" FontSize="13" Foreground="#888"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Empty state -->
+                    <TextBlock x:Name="FolderEmptyLabel"
+                               Text="No sub-folders here · use ↑ Up to navigate"
+                               FontSize="12" Foreground="#555"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Visibility="Collapsed"/>
+
+                    <!-- Scrollable folder list -->
+                    <ScrollViewer x:Name="FolderScrollViewer"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Visibility="Collapsed">
+                        <ItemsControl x:Name="FolderItemsControl">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#22223a" BorderThickness="0,0,0,1"
+                                            Padding="4,1">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="#1e1e40"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <DockPanel LastChildFill="True">
+                                            <!-- Drill-in -->
+                                            <Button DockPanel.Dock="Right"
+                                                    Content="›"
+                                                    Tag="{Binding}"
+                                                    Click="FolderDrillIn_Click"
+                                                    Background="Transparent"
+                                                    Foreground="#7C3AED"
+                                                    BorderThickness="0"
+                                                    Padding="10,6"
+                                                    FontSize="18" FontWeight="Bold"
+                                                    Cursor="Hand"
+                                                    ToolTip="Browse inside this folder"/>
+                                            <!-- Checkbox -->
+                                            <CheckBox DockPanel.Dock="Left"
+                                                      IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                      VerticalAlignment="Center"
+                                                      Margin="8,0,4,0"
+                                                      Foreground="White"/>
+                                            <!-- Name -->
+                                            <StackPanel Orientation="Horizontal"
+                                                        VerticalAlignment="Center"
+                                                        Margin="0,6">
+                                                <TextBlock Text="📁 " FontSize="14"
+                                                           Foreground="White"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13" Foreground="White"
+                                                           VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </Grid>
-            </DockPanel>
+            </Border>
+        </DockPanel>
         </Grid>
 
         <!-- Footer -->
@@ -174,7 +267,7 @@
                     DockPanel.Dock="Right"
                     Style="{StaticResource ActionBtn}"
                     Background="#2A2A3A" Margin="8,0,0,0"/>
-            <Button x:Name="OkButton" Content="Open Folder" Click="Ok_Click"
+            <Button x:Name="OkButton" Content="Open Folder(s)" Click="Ok_Click"
                     DockPanel.Dock="Right"
                     Style="{StaticResource ActionBtn}"
                     IsEnabled="False"/>

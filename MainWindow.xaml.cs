@@ -250,11 +250,11 @@ public partial class MainWindow : Window
     {
         var picker = new Views.MtpDevicePickerWindow { Owner = this };
         if (picker.ShowDialog() == true
-            && picker.SelectedDeviceId  != null
-            && picker.SelectedFolderPath != null
-            && picker.SelectedDeviceName != null)
+            && picker.SelectedDeviceId   != null
+            && picker.SelectedDeviceName != null
+            && picker.SelectedFolderPaths.Count > 0)
         {
-            _vm.LoadMtpFiles(picker.SelectedDeviceId, picker.SelectedFolderPath, picker.SelectedDeviceName);
+            _vm.LoadMtpFiles(picker.SelectedDeviceId, picker.SelectedFolderPaths, picker.SelectedDeviceName);
         }
         CardStack.Focus();
     }

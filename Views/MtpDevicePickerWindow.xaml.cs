@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using FileTinder.Services;
@@ -6,10 +7,43 @@ namespace FileTinder.Views;
 
 public partial class MtpDevicePickerWindow : Window
 {
-    // ── Result ─────────────────────────────────────────────────────────────────
-    public string? SelectedDeviceId   { get; private set; }
-    public string? SelectedFolderPath { get; private set; }
-    public string? SelectedDeviceName { get; private set; }
+    // ── Public results ─────────────────────────────────────────────────────────
+    public string?       SelectedDeviceId   { get; private set; }
+    public string?       SelectedDeviceName { get; private set; }
+    public List<string>  SelectedFolderPaths { get; private set; } = [];
+
+    // Backward-compat single path (first selected)
+    public string? SelectedFolderPath => SelectedFolderPaths.Count > 0
+        ? SelectedFolderPaths[0] : null;
+
+    // ── Private state ──────────────────────────────────────────────────────────
+
+    private string _currentDeviceId = string.Empty;
+    private string _currentPath     = string.Empty;
+
+    private readonly HashSet<string> _checkedPaths = [];
+    private readonly List<(string Label, string Path)> _breadcrumb = [];
+
+    // ── FolderEntry ────────────────────────────────────────────────────────────
+
+    private class FolderEntry : INotifyPropertyChanged
+    {
+        public string Name { get; init; } = "";
+        public string Path { get; init; } = "";
+
+        private bool _isChecked;
+        public bool IsChecked
+        {
+            get => _isChecked;
+            set { _isChecked = value; PropertyChanged?.Invoke(this, new(nameof(IsChecked))); }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+    }
+
+    public class BreadcrumbItem { public string Label { get; init; } = ""; public string Path { get; init; } = ""; }
+
+    // ── Constructor ────────────────────────────────────────────────────────────
 
     public MtpDevicePickerWindow()
     {
@@ -24,17 +58,14 @@ public partial class MtpDevicePickerWindow : Window
         DeviceList.ItemsSource    = null;
         NoDevicesText.Visibility  = Visibility.Collapsed;
         LoadingDevices.Visibility = Visibility.Visible;
-        FolderTree.Items.Clear();
-        OkButton.IsEnabled    = false;
-        SelectedPathText.Text = string.Empty;
-        FolderHint.Visibility = Visibility.Visible;
+        ResetFolderPanel();
+        OkButton.IsEnabled = false;
 
         try
         {
             var devices = await MtpDeviceService.RunSta(MtpDeviceService.GetConnectedDevices);
             LoadingDevices.Visibility = Visibility.Collapsed;
-            if (devices.Count == 0)
-                NoDevicesText.Visibility = Visibility.Visible;
+            if (devices.Count == 0) NoDevicesText.Visibility = Visibility.Visible;
             else
             {
                 DeviceList.ItemsSource       = devices;
@@ -54,9 +85,7 @@ public partial class MtpDevicePickerWindow : Window
         {
             var devices = await MtpDeviceService.RunSta(MtpDeviceService.GetConnectedDevices);
             LoadingDevices.Visibility = Visibility.Collapsed;
-
-            if (devices.Count == 0)
-                NoDevicesText.Visibility = Visibility.Visible;
+            if (devices.Count == 0) NoDevicesText.Visibility = Visibility.Visible;
             else
             {
                 DeviceList.ItemsSource       = devices;
@@ -76,103 +105,158 @@ public partial class MtpDevicePickerWindow : Window
     {
         if (DeviceList.SelectedItem is not MtpDeviceInfo dev) return;
 
-        FolderHint.Visibility  = Visibility.Collapsed;
-        FolderTree.Items.Clear();
-        OkButton.IsEnabled    = false;
+        _currentDeviceId = dev.DeviceId;
+        SelectedDeviceId   = dev.DeviceId;
+        SelectedDeviceName = dev.FriendlyName;
+
+        // Reset everything for the new device
+        _checkedPaths.Clear();
+        _breadcrumb.Clear();
+        OkButton.IsEnabled = false;
         SelectedPathText.Text = string.Empty;
 
+        BreadcrumbBar.Visibility = Visibility.Visible;
+        await NavigateFolderAsync("", "Device");
+    }
+
+    // ── Flat folder navigation ─────────────────────────────────────────────────
+
+    private async Task NavigateFolderAsync(string path, string? label = null)
+    {
+        _currentPath = path;
+        label ??= System.IO.Path.GetFileName(path.TrimEnd('\\')) is { Length: > 0 } n ? n : path;
+
+        bool alreadyInCrumb = _breadcrumb.Any(b => b.Path == path);
+        if (!alreadyInCrumb)
+            _breadcrumb.Add((label, path));
+        else
+        {
+            int idx = _breadcrumb.FindIndex(b => b.Path == path);
+            _breadcrumb.RemoveRange(idx + 1, _breadcrumb.Count - idx - 1);
+        }
+
+        RefreshBreadcrumb();
+        FolderUpBtn.IsEnabled = _breadcrumb.Count > 1;
+
+        FolderHint.Visibility         = Visibility.Collapsed;
+        FolderLoadingPanel.Visibility  = Visibility.Visible;
+        FolderScrollViewer.Visibility  = Visibility.Collapsed;
+        FolderEmptyLabel.Visibility    = Visibility.Collapsed;
+
+        List<string> subs;
         try
         {
-            var roots = await MtpDeviceService.RunSta(() => MtpDeviceService.GetRootFolders(dev.DeviceId));
-
-            foreach (var root in roots)
-                FolderTree.Items.Add(CreateNode(root, dev.DeviceId));
-
-            if (FolderTree.Items.Count == 0)
-                FolderHint.Visibility = Visibility.Visible;
+            subs = path == ""
+                ? await MtpDeviceService.GetRootFoldersAsync(_currentDeviceId)
+                : await MtpDeviceService.GetSubfoldersAsync(_currentDeviceId, path);
         }
-        catch (Exception ex)
+        catch { subs = []; }
+
+        FolderLoadingPanel.Visibility = Visibility.Collapsed;
+
+        if (subs.Count == 0)
         {
-            ShowError($"Could not read folders from \"{dev.FriendlyName}\"", ex);
-            FolderHint.Visibility = Visibility.Visible;
+            FolderEmptyLabel.Visibility = Visibility.Visible;
         }
+        else
+        {
+            var items = subs
+                .Select(p =>
+                {
+                    var entry = new FolderEntry
+                    {
+                        Name      = System.IO.Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p,
+                        Path      = p,
+                        IsChecked = _checkedPaths.Contains(p)
+                    };
+                    entry.PropertyChanged += (_, ev) =>
+                    {
+                        if (ev.PropertyName != nameof(FolderEntry.IsChecked)) return;
+                        if (entry.IsChecked) _checkedPaths.Add(entry.Path);
+                        else _checkedPaths.Remove(entry.Path);
+                        RefreshFooter();
+                    };
+                    return entry;
+                })
+                .OrderBy(f => f.Name)
+                .ToList();
+
+            FolderItemsControl.ItemsSource = items;
+            FolderScrollViewer.Visibility  = Visibility.Visible;
+        }
+
+        RefreshFooter();
     }
 
-    // ── Folder tree ───────────────────────────────────────────────────────────
-
-    private TreeViewItem CreateNode(string path, string deviceId)
+    private void RefreshBreadcrumb()
     {
-        var node = new TreeViewItem
-        {
-            Header = System.IO.Path.GetFileName(path).TrimEnd('/') is { Length: > 0 } n ? n : path,
-            Tag    = (deviceId, path)
-        };
-        // Placeholder child so the expand arrow appears
-        node.Items.Add(new TreeViewItem { Header = "⏳ Loading…", Tag = "__placeholder__" });
-        return node;
+        FolderBreadcrumb.ItemsSource = null;
+        FolderBreadcrumb.ItemsSource = _breadcrumb
+            .Select(b => new BreadcrumbItem { Label = b.Label, Path = b.Path })
+            .ToList();
     }
 
-    private async void TreeViewItem_Expanded(object sender, RoutedEventArgs e)
+    private void RefreshFooter()
     {
-        if (sender is not TreeViewItem node) return;
-        if (node.Tag is not (string devId, string folderPath)) return;
-
-        // Only load if the single placeholder is still there
-        if (node.Items.Count != 1
-            || node.Items[0] is not TreeViewItem first
-            || first.Tag as string != "__placeholder__") return;
-
-        node.Items.Clear();
-
-        try
-        {
-            var subs = await MtpDeviceService.RunSta(() => MtpDeviceService.GetSubfolders(devId, folderPath));
-            foreach (var sub in subs)
-                node.Items.Add(CreateNode(sub, devId));
-
-            if (node.Items.Count == 0)
-                node.Items.Add(new TreeViewItem { Header = "(empty)", IsEnabled = false });
-        }
-        catch
-        {
-            node.Items.Add(new TreeViewItem { Header = "⚠ Could not load", IsEnabled = false });
-        }
+        int n = _checkedPaths.Count;
+        OkButton.IsEnabled    = n > 0;
+        SelectedPathText.Text = n == 0
+            ? "Check folders to select · › to browse inside"
+            : $"{n} folder{(n == 1 ? "" : "s")} selected";
     }
+
+    private void ResetFolderPanel()
+    {
+        _currentDeviceId = string.Empty;
+        _currentPath     = string.Empty;
+        _checkedPaths.Clear();
+        _breadcrumb.Clear();
+        FolderBreadcrumb.ItemsSource   = null;
+        FolderItemsControl.ItemsSource = null;
+        FolderHint.Visibility          = Visibility.Visible;
+        FolderLoadingPanel.Visibility  = Visibility.Collapsed;
+        FolderScrollViewer.Visibility  = Visibility.Collapsed;
+        FolderEmptyLabel.Visibility    = Visibility.Collapsed;
+        BreadcrumbBar.Visibility       = Visibility.Collapsed;
+        FolderUpBtn.IsEnabled          = false;
+        SelectedPathText.Text          = string.Empty;
+    }
+
+    // ── Event handlers ────────────────────────────────────────────────────────
+
+    private async void FolderBreadcrumb_Click(object sender, RoutedEventArgs e)
+    {
+        if (((System.Windows.Controls.Button)sender).Tag is BreadcrumbItem item)
+            await NavigateFolderAsync(item.Path, item.Label);
+    }
+
+    private async void FolderUp_Click(object sender, RoutedEventArgs e)
+    {
+        if (_breadcrumb.Count < 2) return;
+        var parent = _breadcrumb[^2];
+        await NavigateFolderAsync(parent.Path, parent.Label);
+    }
+
+    private async void FolderDrillIn_Click(object sender, RoutedEventArgs e)
+    {
+        if (((System.Windows.Controls.Button)sender).Tag is FolderEntry entry)
+            await NavigateFolderAsync(entry.Path, entry.Name);
+    }
+
+    private void Ok_Click(object sender, RoutedEventArgs e)
+    {
+        SelectedFolderPaths = [.. _checkedPaths];
+        DialogResult = true;
+    }
+
+    private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
     // ── Error helper ──────────────────────────────────────────────────────────
 
     private void ShowError(string message, Exception? ex = null)
     {
         var detail = ex != null ? $"\n\n{ex.GetType().Name}: {ex.Message}" : string.Empty;
-        System.Windows.MessageBox.Show(
-            message + detail,
-            "Device Error",
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-    }
-
-    private void FolderTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
-    {
-        if (DeviceList.SelectedItem is not MtpDeviceInfo dev) return;
-        if (FolderTree.SelectedItem is not TreeViewItem node) return;
-        if (node.Tag is not (string _, string path)) return;
-
-        SelectedDeviceId   = dev.DeviceId;
-        SelectedDeviceName = dev.FriendlyName;
-        SelectedFolderPath = path;
-        SelectedPathText.Text = $"{dev.FriendlyName}  ›  {path}";
-        OkButton.IsEnabled = true;
-    }
-
-    // ── Buttons ───────────────────────────────────────────────────────────────
-
-    private void Ok_Click(object sender, RoutedEventArgs e)
-    {
-        DialogResult = true;
-    }
-
-    private void Cancel_Click(object sender, RoutedEventArgs e)
-    {
-        DialogResult = false;
+        System.Windows.MessageBox.Show(message + detail, "Device Error",
+            MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }

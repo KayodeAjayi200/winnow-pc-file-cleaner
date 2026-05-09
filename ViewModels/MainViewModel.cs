@@ -32,9 +32,10 @@ public class MainViewModel : INotifyPropertyChanged
     private const int MaxUndoDepth = 10;
 
     // MTP state
-    private string? _mtpDeviceId;
-    private string  _mtpDeviceName = string.Empty;
-    private bool    _mtpPermanentDeleteWarningShown;
+    private string?       _mtpDeviceId;
+    private string        _mtpDeviceName = string.Empty;
+    private List<string>  _mtpFolderPaths = [];
+    private bool          _mtpPermanentDeleteWarningShown;
 
     // Presets
     private readonly FolderPresetsService _presetsService = new();
@@ -497,8 +498,11 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (dialog.ShowDialog() == DialogResult.OK)
         {
-            SelectedScanFolders = null; // reset subfolder selection when root changes
-            FolderPath = dialog.SelectedPath;
+            SelectedScanFolders = null;  // reset subfolder selection when root changes
+            _mtpDeviceId        = null;
+            _mtpFolderPaths     = [];
+            IsMtpSource         = false;
+            FolderPath          = dialog.SelectedPath;
             LoadFiles();
         }
     }
@@ -653,16 +657,20 @@ public class MainViewModel : INotifyPropertyChanged
         {
             if (IsMtpSource && _mtpDeviceId != null)
             {
-                // Always scan without filters so _rawFiles has everything;
+                // Scan every selected folder — unfiltered so _rawFiles has everything;
                 // ApplyFiltersAndSort() applies filters in memory afterward.
-                await MtpDeviceService.ScanAsync(
-                    _mtpDeviceId, FolderPath,
-                    IncludeSubfolders, FileTypeCategory.All, DateFilter.Any,
-                    item =>
-                    {
-                        lock (_pendingLock) _pendingFiles.Add(item);
-                    },
-                    ct);
+                foreach (var folderPath in _mtpFolderPaths)
+                {
+                    if (ct.IsCancellationRequested) break;
+                    await MtpDeviceService.ScanAsync(
+                        _mtpDeviceId, folderPath,
+                        IncludeSubfolders, FileTypeCategory.All, DateFilter.Any,
+                        item =>
+                        {
+                            lock (_pendingLock) _pendingFiles.Add(item);
+                        },
+                        ct);
+                }
             }
             else if (_selectedScanFolders != null)
             {
@@ -732,14 +740,21 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>Load files from a connected MTP device.</summary>
-    public void LoadMtpFiles(string deviceId, string folderPath, string deviceName)
+    public void LoadMtpFiles(string deviceId, List<string> folderPaths, string deviceName)
     {
         _mtpDeviceId   = deviceId;
         _mtpDeviceName = deviceName;
         IsMtpSource    = true;
-        FolderPath     = folderPath;
+        // Display shows first path; scanning uses all paths
+        FolderPath     = string.Join(" + ", folderPaths.Select(p =>
+            System.IO.Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p));
+        _mtpFolderPaths = folderPaths;
         LoadFiles();
     }
+
+    // Backward-compat single path overload
+    public void LoadMtpFiles(string deviceId, string folderPath, string deviceName) =>
+        LoadMtpFiles(deviceId, [folderPath], deviceName);
 
     /// <summary>Invalidates the cache for the current source and triggers a fresh scan.</summary>
     private void RefreshScan()
@@ -967,9 +982,10 @@ public class MainViewModel : INotifyPropertyChanged
     public void LoadPreset(FolderPreset preset)
     {
         if (!Directory.Exists(preset.Path)) return;
-        _mtpDeviceId = null;
-        IsMtpSource  = false;
-        FolderPath   = preset.Path;
+        _mtpDeviceId    = null;
+        _mtpFolderPaths = [];
+        IsMtpSource     = false;
+        FolderPath      = preset.Path;
         LoadFiles();
     }
 
