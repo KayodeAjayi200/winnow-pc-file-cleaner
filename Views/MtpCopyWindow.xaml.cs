@@ -159,8 +159,15 @@ public partial class MtpCopyWindow : Window
 
         if (_folders.Count == 0)
         {
-            EmptyText.Visibility = Visibility.Visible;
-            return;
+            // The selected path has no sub-folders — it IS a leaf folder.
+            // Add it as the single item so the user can copy it directly.
+            string leafName = System.IO.Path.GetFileName(_sourcePath.TrimEnd('\\', '/'));
+            _folders.Add(new FolderItem
+            {
+                Path        = _sourcePath,
+                DisplayName = string.IsNullOrEmpty(leafName) ? _sourcePath : leafName
+            });
+            EmptyText.Visibility = Visibility.Collapsed;
         }
 
         FolderScrollViewer.Visibility = Visibility.Visible;
