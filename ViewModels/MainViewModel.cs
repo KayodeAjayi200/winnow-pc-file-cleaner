@@ -12,7 +12,8 @@ namespace FileTinder.ViewModels;
 public class MainViewModel : INotifyPropertyChanged
 {
     // ── Internal state ─────────────────────────────────────────────────────────
-    private readonly List<FileItem> _allFiles    = [];
+    private readonly List<FileItem> _rawFiles    = [];   // unfiltered scan results
+    private readonly List<FileItem> _allFiles    = [];   // filtered+sorted view for swiping
     private readonly List<FileItem> _pendingFiles = [];
     private readonly object         _pendingLock  = new();
     private int                     _currentIndex;
@@ -78,21 +79,20 @@ public class MainViewModel : INotifyPropertyChanged
     public SortMode SelectedSortMode
     {
         get => _selectedSortMode;
-        set { _selectedSortMode = value; OnPropertyChanged(); if (HasFolder) LoadFiles(); }
+        set { _selectedSortMode = value; OnPropertyChanged(); if (HasFolder) FilterChanged(); }
     }
 
     private FileTypeCategory _selectedTypeFilter = FileTypeCategory.All;
     public FileTypeCategory SelectedTypeFilter
     {
         get => _selectedTypeFilter;
-        set { _selectedTypeFilter = value; OnPropertyChanged(); if (HasFolder) LoadFiles(); }
-    }
+        set { _selectedTypeFilter = value; OnPropertyChanged(); if (HasFolder) FilterChanged(); }    }
 
     private DateFilter _selectedDateFilter = DateFilter.Any;
     public DateFilter SelectedDateFilter
     {
         get => _selectedDateFilter;
-        set { _selectedDateFilter = value; OnPropertyChanged(); if (HasFolder) LoadFiles(); }
+        set { _selectedDateFilter = value; OnPropertyChanged(); if (HasFolder) FilterChanged(); }
     }
 
     private FileItem? _currentFile;
@@ -520,6 +520,50 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Called when filter or sort changes. Re-applies filters to existing raw data
+    /// without rescanning — only falls back to LoadFiles() if no data is loaded yet.
+    /// </summary>
+    private void FilterChanged()
+    {
+        if (!HasFolder) return;
+        if (_rawFiles.Count > 0 && !_isScanning)
+            ApplyFiltersAndSort();
+        else
+            LoadFiles();
+    }
+
+    /// <summary>
+    /// Rebuilds the swiping list from _rawFiles by applying the current
+    /// type / date filters and sort mode — no disk access needed.
+    /// </summary>
+    private void ApplyFiltersAndSort()
+    {
+        var cutoff = FileScanner.GetDateCutoff(_selectedDateFilter);
+
+        lock (_pendingLock) _pendingFiles.Clear();
+        _allFiles.Clear();
+        _currentIndex = 0;
+        FilesReviewed = 0;
+
+        var filtered = _rawFiles.Where(f =>
+            (_selectedTypeFilter == FileTypeCategory.All || f.Category == _selectedTypeFilter) &&
+            (cutoff == null || f.LastModified >= cutoff));
+        _allFiles.AddRange(filtered);
+
+        ScanCount          = _allFiles.Count;
+        _filteredTotalSize = _allFiles.Sum(f => f.Size);
+        SortFiles();
+        RefreshCurrentCards();
+
+        OnPropertyChanged(nameof(IsComplete));
+        OnPropertyChanged(nameof(AllFiles));
+        OnPropertyChanged(nameof(QueueInfo));
+        OnPropertyChanged(nameof(ScanStatusText));
+        OnPropertyChanged(nameof(FilteredTotalSizeFormatted));
+        OnPropertyChanged(nameof(Progress));
+    }
+
     public async void LoadFiles()
     {
         if (!HasFolder) return;
@@ -534,11 +578,8 @@ public class MainViewModel : INotifyPropertyChanged
         bool isSourceChange = newCacheKey != _currentCacheKey;
         _currentCacheKey   = newCacheKey;
 
-        bool isDefaultFilters = _selectedTypeFilter == FileTypeCategory.All
-                             && _selectedDateFilter  == DateFilter.Any;
-
-        // ── Cache hit? Load instantly without a blocking overlay ───────────────
-        if (isSourceChange && isDefaultFilters)
+        // ── Cache hit? Load instantly — works with any filter ─────────────────
+        if (isSourceChange)
         {
             var cached = ScanCacheService.Load(newCacheKey, IsMtpSource);
             if (cached != null)
@@ -554,16 +595,9 @@ public class MainViewModel : INotifyPropertyChanged
                 IsScanning    = false;
                 ResetStats();
 
-                _allFiles.AddRange(cached.Value.Files);
-                ScanCount          = _allFiles.Count;
-                _filteredTotalSize = _allFiles.Sum(f => f.Size);
-                SortFiles();
-                RefreshCurrentCards();
-
-                OnPropertyChanged(nameof(IsComplete));
-                OnPropertyChanged(nameof(AllFiles));
-                OnPropertyChanged(nameof(QueueInfo));
-                OnPropertyChanged(nameof(ScanStatusText));
+                _rawFiles.Clear();
+                _rawFiles.AddRange(cached.Value.Files);
+                ApplyFiltersAndSort();   // filters + sorts + refreshes cards
 
                 LoadedFromCache = true;
                 CacheAgeText    = ScanCacheService.FormatAge(cached.Value.ScannedAt);
@@ -598,6 +632,7 @@ public class MainViewModel : INotifyPropertyChanged
         var ct = _scanCts.Token;
 
         lock (_pendingLock) _pendingFiles.Clear();
+        _rawFiles.Clear();
         _allFiles.Clear();
         _currentIndex = 0;
         ScanCount     = 0;
@@ -618,9 +653,11 @@ public class MainViewModel : INotifyPropertyChanged
         {
             if (IsMtpSource && _mtpDeviceId != null)
             {
+                // Always scan without filters so _rawFiles has everything;
+                // ApplyFiltersAndSort() applies filters in memory afterward.
                 await MtpDeviceService.ScanAsync(
                     _mtpDeviceId, FolderPath,
-                    IncludeSubfolders, SelectedTypeFilter, SelectedDateFilter,
+                    IncludeSubfolders, FileTypeCategory.All, DateFilter.Any,
                     item =>
                     {
                         lock (_pendingLock) _pendingFiles.Add(item);
@@ -629,9 +666,9 @@ public class MainViewModel : INotifyPropertyChanged
             }
             else if (_selectedScanFolders != null)
             {
-                // Scan only the user-selected subfolders
+                // Scan only the user-selected subfolders (unfiltered)
                 await FileScanner.ScanMultipleAsync(
-                    _selectedScanFolders, SelectedTypeFilter, SelectedDateFilter,
+                    _selectedScanFolders, FileTypeCategory.All, DateFilter.Any,
                     item =>
                     {
                         lock (_pendingLock) _pendingFiles.Add(item);
@@ -641,7 +678,7 @@ public class MainViewModel : INotifyPropertyChanged
             else
             {
                 await FileScanner.ScanStreamingAsync(
-                    FolderPath, SelectedTypeFilter, SelectedDateFilter, IncludeSubfolders,
+                    FolderPath, FileTypeCategory.All, DateFilter.Any, IncludeSubfolders,
                     item =>
                     {
                         lock (_pendingLock)
@@ -656,14 +693,17 @@ public class MainViewModel : INotifyPropertyChanged
             _scanTimer.Stop();
         }
 
-        FlushPendingFiles(); // final flush
+        FlushPendingFiles(); // final flush — populates _rawFiles + _allFiles
         IsScanning           = false;
         _isInitialSourceScan = false;
         OnPropertyChanged(nameof(IsLoadingInitial));
 
-        // Save to cache when using default filters (full unfiltered list)
-        if (!ct.IsCancellationRequested && isDefaultFilters && _allFiles.Count > 0)
-            ScanCacheService.SaveAsync(newCacheKey, _allFiles.ToList());
+        // Apply filters to the now-complete raw list
+        ApplyFiltersAndSort();
+
+        // Always cache the full unfiltered raw scan
+        if (!ct.IsCancellationRequested && _rawFiles.Count > 0)
+            ScanCacheService.SaveAsync(newCacheKey, _rawFiles.ToList());
 
         // Restore session (only for local folders)
         if (!IsMtpSource) TryRestoreSession();
@@ -730,7 +770,16 @@ public class MainViewModel : INotifyPropertyChanged
             _pendingFiles.Clear();
         }
 
-        _allFiles.AddRange(batch);
+        // All items go into the raw (unfiltered) list
+        _rawFiles.AddRange(batch);
+
+        // Only matching items go into the filtered display list
+        var cutoff = FileScanner.GetDateCutoff(_selectedDateFilter);
+        var matching = batch.Where(f =>
+            (_selectedTypeFilter == FileTypeCategory.All || f.Category == _selectedTypeFilter) &&
+            (cutoff == null || f.LastModified >= cutoff));
+        _allFiles.AddRange(matching);
+
         ScanCount = _allFiles.Count;
 
         // Sort by selected sort mode

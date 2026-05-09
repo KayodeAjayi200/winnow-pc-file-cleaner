@@ -207,11 +207,50 @@ public partial class MtpCopyWindow : Window
     {
         _sizeCts?.Cancel();
         var win = new MtpFolderInputDialog(_deviceId, _sourcePath) { Owner = this };
-        if (win.ShowDialog() == true && win.SelectedPath is { } newPath)
+        if (win.ShowDialog() == true && win.SelectedPaths.Count > 0)
         {
-            _sourcePath         = newPath;
-            SourcePathText.Text = newPath;
-            await LoadFoldersAsync();
+            _sizeCts = new CancellationTokenSource();
+            var sizeCt = _sizeCts.Token;
+
+            // Populate folder list directly from user's selections
+            _folders.Clear();
+            foreach (var p in win.SelectedPaths)
+            {
+                var name = System.IO.Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p;
+                _folders.Add(new FolderItem { Path = p, DisplayName = name });
+            }
+
+            SourcePathText.Text = win.SelectedPaths.Count == 1
+                ? win.SelectedPaths[0]
+                : $"{win.SelectedPaths.Count} folders selected";
+
+            LoadingPanel.Visibility       = Visibility.Collapsed;
+            FolderScrollViewer.Visibility = Visibility.Visible;
+            RefreshCopyBtn();
+
+            // Calculate sizes in the background
+            var folderMap = _folders.ToDictionary(f => f.Path);
+            try
+            {
+                await MtpDeviceService.CalculateFolderSizesAsync(
+                    _deviceId,
+                    folderMap.Keys.ToList(),
+                    (path, size, count) =>
+                    {
+                        Dispatcher.BeginInvoke(() =>
+                        {
+                            if (folderMap.TryGetValue(path, out var item))
+                            {
+                                item.Size      = size;
+                                item.FileCount = count;
+                                UpdateSummary();
+                            }
+                        });
+                    },
+                    sizeCt);
+            }
+            catch (OperationCanceledException) { }
+            catch { }
         }
     }
 

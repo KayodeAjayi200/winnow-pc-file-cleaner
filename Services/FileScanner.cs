@@ -191,7 +191,7 @@ public static class FileScanner
         return FileTypeCategory.Other;
     }
 
-    private static DateTime? GetDateCutoff(DateFilter filter) => filter switch
+    public static DateTime? GetDateCutoff(DateFilter filter) => filter switch
     {
         DateFilter.Last7Days   => DateTime.Now.AddDays(-7),
         DateFilter.Last30Days  => DateTime.Now.AddDays(-30),

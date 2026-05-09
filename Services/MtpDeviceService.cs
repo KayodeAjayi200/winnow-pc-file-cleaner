@@ -671,10 +671,10 @@ public static class MtpDeviceService
     {
         ct.ThrowIfCancellationRequested();
 
-        // Delete files in this directory
+        // Delete all files in this directory and subdirectories at once
         try
         {
-            foreach (var file in device.EnumerateFiles(path, "*", SearchOption.TopDirectoryOnly))
+            foreach (var file in device.EnumerateFiles(path, "*", SearchOption.AllDirectories))
             {
                 ct.ThrowIfCancellationRequested();
                 try { device.DeleteFile(file); } catch { }
@@ -683,19 +683,20 @@ public static class MtpDeviceService
         catch (OperationCanceledException) { throw; }
         catch { }
 
-        // Recurse into sub-directories (delete children before parent)
+        // Recurse into sub-directories bottom-up and delete each empty dir
         try
         {
-            foreach (var sub in device.EnumerateDirectories(path))
+            // GetDirectoryInfo().EnumerateDirectories() is the correct MediaDevices API
+            foreach (var subInfo in device.GetDirectoryInfo(path).EnumerateDirectories())
             {
                 ct.ThrowIfCancellationRequested();
-                DeleteFolderRecursive(device, sub, ct);
+                try { device.DeleteDirectory(subInfo.FullName); } catch { }
             }
         }
         catch (OperationCanceledException) { throw; }
         catch { }
 
-        // Now delete the (hopefully empty) directory
+        // Finally delete the root directory itself
         try { device.DeleteDirectory(path); } catch { }
     }
 
