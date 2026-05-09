@@ -76,8 +76,16 @@ public static class MtpDeviceService
             .ToList();
     }
 
-    /// <summary>Returns immediate sub-directories of the given MTP path.</summary>
-    public static async Task<List<string>> GetSubfoldersAsync(string deviceId, string path)
+    /// <summary>Returns immediate sub-directories of the given MTP path (async, STA-safe).</summary>
+    public static Task<List<string>> GetSubfoldersAsync(string deviceId, string path) =>
+        RunSta<List<string>>(() => GetSubfolders(deviceId, path));
+
+    /// <summary>Returns root storage folders on the device (async, STA-safe).</summary>
+    public static Task<List<string>> GetRootFoldersAsync(string deviceId) =>
+        RunSta<List<string>>(() => GetRootFolders(deviceId));
+
+    // Old async version kept for reference — replaced above with proven RunSta pattern
+    private static async Task<List<string>> GetSubfoldersAsyncOld(string deviceId, string path)
     {
         try
         {

@@ -49,9 +49,13 @@ public partial class MtpFolderInputDialog : Window
         InitializeComponent();
         _deviceId = deviceId;
 
-        // Open at the parent so the user can see siblings and navigate freely
-        var parent = GetParentPath(startPath);
-        Loaded += async (_, _) => await NavigateToAsync(parent ?? startPath, label: "Device");
+        // Always open at device root so the user can navigate freely.
+        // startPath is ignored for navigation; pre-check it so the user's previous
+        // selection remains ticked.
+        if (!string.IsNullOrEmpty(startPath))
+            _checkedPaths.Add(startPath);
+
+        Loaded += async (_, _) => await NavigateToAsync("", label: "Device");
     }
 
     // ── Navigation ─────────────────────────────────────────────────────────────
@@ -78,7 +82,12 @@ public partial class MtpFolderInputDialog : Window
         EmptyLabel.Visibility        = Visibility.Collapsed;
 
         List<string> subfolders;
-        try { subfolders = await MtpDeviceService.GetSubfoldersAsync(_deviceId, path); }
+        try
+        {
+            subfolders = path == ""
+                ? await MtpDeviceService.GetRootFoldersAsync(_deviceId)
+                : await MtpDeviceService.GetSubfoldersAsync(_deviceId, path);
+        }
         catch { subfolders = []; }
 
         LoadingPanel.Visibility = Visibility.Collapsed;
