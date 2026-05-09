@@ -274,6 +274,39 @@ public partial class MtpDevicePickerWindow : Window
             await NavigateFolderAsync(entry.Path, entry.Name);
     }
 
+    private async void FolderDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (((System.Windows.Controls.Button)sender).Tag is not FolderEntry entry) return;
+
+        var confirm = System.Windows.MessageBox.Show(
+            $"Permanently delete \"{entry.Name}\" and all its contents from the device?\n\nThis cannot be undone.",
+            "Delete Folder",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (confirm != MessageBoxResult.Yes) return;
+
+        // Show loading while deleting
+        FolderScrollViewer.IsEnabled  = false;
+        FolderLoadingPanel.Visibility = Visibility.Visible;
+        FolderLoadingText.Text        = $"Deleting \"{entry.Name}\"…";
+
+        try
+        {
+            await MtpDeviceService.DeleteFoldersAsync(_currentDeviceId, [entry.Path]);
+            _checkedPaths.Remove(entry.Path);
+            // Refresh the current folder listing
+            await NavigateFolderAsync(_currentPath);
+        }
+        catch (Exception ex)
+        {
+            FolderLoadingPanel.Visibility = Visibility.Collapsed;
+            FolderScrollViewer.IsEnabled  = true;
+            System.Windows.MessageBox.Show($"Could not delete folder: {ex.Message}", "Delete Failed",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void Ok_Click(object sender, RoutedEventArgs e)
     {
         SelectedFolderPaths = [.. _checkedPaths];
