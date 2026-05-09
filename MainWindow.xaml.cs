@@ -261,6 +261,12 @@ public partial class MainWindow : Window
         CardStack.Focus();
     }
 
+    private void ClearSubfolderSelection_Click(object sender, RoutedEventArgs e)
+    {
+        _vm.SelectedScanFolders = null;
+        _vm.LoadFiles();
+    }
+
     // ── View mode toggles ──────────────────────────────────────────────────────
 
     private void SwipeModeBtn_Click(object sender, System.Windows.RoutedEventArgs e)

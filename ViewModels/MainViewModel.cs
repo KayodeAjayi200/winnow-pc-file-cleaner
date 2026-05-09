@@ -47,6 +47,26 @@ public class MainViewModel : INotifyPropertyChanged
         set { _folderPath = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasFolder)); }
     }
 
+    // null = scan entire root; non-null = scan only these subfolders
+    private List<string>? _selectedScanFolders;
+    public List<string>? SelectedScanFolders
+    {
+        get => _selectedScanFolders;
+        set
+        {
+            _selectedScanFolders = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ScanFolderSummary));
+            OnPropertyChanged(nameof(HasCustomScanFolders));
+        }
+    }
+
+    public bool HasCustomScanFolders => _selectedScanFolders != null;
+
+    public string ScanFolderSummary => _selectedScanFolders == null
+        ? string.Empty
+        : $"{_selectedScanFolders.Count} folder{(_selectedScanFolders.Count == 1 ? "" : "s")} selected";
+
     private bool _includeSubfolders = true;
     public bool IncludeSubfolders
     {
@@ -408,6 +428,7 @@ public class MainViewModel : INotifyPropertyChanged
     // ── Commands ───────────────────────────────────────────────────────────────
 
     public ICommand BrowseFolderCommand      { get; }
+    public ICommand PickSubfoldersCommand    { get; }
     public ICommand KeepCommand              { get; }
     public ICommand DeleteCommand            { get; }
     public ICommand ReloadCommand            { get; }
@@ -425,6 +446,7 @@ public class MainViewModel : INotifyPropertyChanged
     public MainViewModel()
     {
         BrowseFolderCommand       = new RelayCommand(BrowseFolder);
+        PickSubfoldersCommand     = new RelayCommand(PickSubfolders, () => HasFolder && !IsMtpSource);
         KeepCommand               = new RelayCommand(Keep,   () => HasCurrentFile);
         DeleteCommand             = new RelayCommand(Delete, () => HasCurrentFile);
         ReloadCommand             = new RelayCommand(LoadFiles, () => HasFolder);
@@ -475,7 +497,25 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (dialog.ShowDialog() == DialogResult.OK)
         {
+            SelectedScanFolders = null; // reset subfolder selection when root changes
             FolderPath = dialog.SelectedPath;
+            LoadFiles();
+        }
+    }
+
+    /// <summary>Opens the subfolder picker so the user can choose which subfolders to scan.</summary>
+    private void PickSubfolders()
+    {
+        if (!HasFolder || IsMtpSource) return;
+
+        var picker = new FileTinder.Views.SubfolderPickerWindow(FolderPath)
+        {
+            Owner = Application.Current.MainWindow
+        };
+
+        if (picker.ShowDialog() == true)
+        {
+            SelectedScanFolders = picker.SelectedPaths.Count == 0 ? null : picker.SelectedPaths;
             LoadFiles();
         }
     }
@@ -485,7 +525,12 @@ public class MainViewModel : INotifyPropertyChanged
         if (!HasFolder) return;
 
         // ── Source-change detection ─────────────────────────────────────────────
-        var newCacheKey    = ScanCacheService.MakeCacheKey(FolderPath, _mtpDeviceId);
+        // Include selected subfolders in the cache key so different selections cache separately
+        var subfolderKey = _selectedScanFolders == null
+            ? string.Empty
+            : string.Join("|", _selectedScanFolders.OrderBy(p => p));
+        var newCacheKey = ScanCacheService.MakeCacheKey(FolderPath, _mtpDeviceId)
+                        + (subfolderKey.Length > 0 ? $":{subfolderKey.GetHashCode()}" : string.Empty);
         bool isSourceChange = newCacheKey != _currentCacheKey;
         _currentCacheKey   = newCacheKey;
 
@@ -576,6 +621,17 @@ public class MainViewModel : INotifyPropertyChanged
                 await MtpDeviceService.ScanAsync(
                     _mtpDeviceId, FolderPath,
                     IncludeSubfolders, SelectedTypeFilter, SelectedDateFilter,
+                    item =>
+                    {
+                        lock (_pendingLock) _pendingFiles.Add(item);
+                    },
+                    ct);
+            }
+            else if (_selectedScanFolders != null)
+            {
+                // Scan only the user-selected subfolders
+                await FileScanner.ScanMultipleAsync(
+                    _selectedScanFolders, SelectedTypeFilter, SelectedDateFilter,
                     item =>
                     {
                         lock (_pendingLock) _pendingFiles.Add(item);

@@ -89,6 +89,47 @@ public static class FileScanner
         }, ct);
     }
 
+    /// <summary>
+    /// Streams files from multiple selected subfolders (always recursive within each).
+    /// </summary>
+    public static async Task ScanMultipleAsync(
+        IEnumerable<string> folderPaths,
+        FileTypeCategory typeFilter,
+        DateFilter dateFilter,
+        Action<FileItem> onFileFound,
+        CancellationToken ct)
+    {
+        var cutoff = GetDateCutoff(dateFilter);
+
+        await Task.Run(() =>
+        {
+            foreach (var folderPath in folderPaths)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!Directory.Exists(folderPath)) continue;
+                try
+                {
+                    foreach (var path in Directory.EnumerateFiles(folderPath, "*", SearchOption.AllDirectories))
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        try
+                        {
+                            var item = BuildFileItem(path);
+                            if ((typeFilter == FileTypeCategory.All || item.Category == typeFilter)
+                                && (cutoff == null || item.LastModified >= cutoff))
+                            {
+                                onFileFound(item);
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                catch (OperationCanceledException) { throw; }
+                catch { }
+            }
+        }, ct);
+    }
+
     private static FileItem BuildFileItem(string path)
     {
         var info = new FileInfo(path);

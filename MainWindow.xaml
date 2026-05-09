@@ -145,82 +145,83 @@
                 Background="{StaticResource BgSurfaceBrush}"
                 BorderBrush="{StaticResource BorderSubtleBrush}"
                 BorderThickness="0,0,0,1"
-                Padding="24,12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+                Padding="24,10">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-                <TextBox Grid.Column="0"
-                         Style="{StaticResource PathTextBoxStyle}"
-                         Text="{Binding FolderPath, Mode=OneWay}"
-                         VerticalAlignment="Center"
-                         Margin="0,0,10,0"/>
+                    <TextBox Grid.Column="0"
+                             Style="{StaticResource PathTextBoxStyle}"
+                             Text="{Binding FolderPath, Mode=OneWay}"
+                             VerticalAlignment="Center"
+                             Margin="0,0,10,0"/>
 
-                <Button Grid.Column="1"
-                        Style="{StaticResource BrowseButtonStyle}"
-                        Command="{Binding BrowseFolderCommand}"
-                        Margin="0,0,6,0">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📂" FontSize="14" Margin="0,0,6,0"/>
-                        <TextBlock Text="Browse"/>
-                    </StackPanel>
-                </Button>
+                    <Button Grid.Column="1"
+                            Style="{StaticResource BrowseButtonStyle}"
+                            Command="{Binding BrowseFolderCommand}"
+                            Margin="0,0,6,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📂" FontSize="14" Margin="0,0,6,0"/>
+                            <TextBlock Text="Browse"/>
+                        </StackPanel>
+                    </Button>
 
-                <!-- Browse connected device (MTP / iPhone / Android) -->
-                <Button Grid.Column="2"
-                        x:Name="BrowseDeviceButton"
-                        Style="{StaticResource BrowseButtonStyle}"
-                        Click="BrowseDeviceButton_Click"
-                        ToolTip="Browse a connected phone or device"
-                        Margin="0,0,6,0">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📱" FontSize="14" Margin="0,0,6,0"/>
-                        <TextBlock Text="Device"/>
-                    </StackPanel>
-                </Button>
+                    <!-- Browse connected device (MTP / iPhone / Android) -->
+                    <Button Grid.Column="2"
+                            x:Name="BrowseDeviceButton"
+                            Style="{StaticResource BrowseButtonStyle}"
+                            Click="BrowseDeviceButton_Click"
+                            ToolTip="Browse a connected phone or device"
+                            Margin="0,0,6,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📱" FontSize="14" Margin="0,0,6,0"/>
+                            <TextBlock Text="Device"/>
+                        </StackPanel>
+                    </Button>
 
-                <!-- Backup button — visible only when an MTP device is loaded -->
-                <Button Grid.Column="3"
-                        x:Name="BackupDeviceButton"
-                        Style="{StaticResource BrowseButtonStyle}"
-                        Click="BackupDeviceButton_Click"
-                        ToolTip="Copy folders from connected device to PC"
-                        Margin="0,0,10,0"
-                        Visibility="{Binding IsMtpSource, Converter={StaticResource BoolToVis}}">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="💾" FontSize="14" Margin="0,0,6,0"/>
-                        <TextBlock Text="Backup"/>
-                    </StackPanel>
-                </Button>
+                    <!-- Backup button — visible only when an MTP device is loaded -->
+                    <Button Grid.Column="3"
+                            x:Name="BackupDeviceButton"
+                            Style="{StaticResource BrowseButtonStyle}"
+                            Click="BackupDeviceButton_Click"
+                            ToolTip="Copy folders from connected device to PC"
+                            Margin="0,0,10,0"
+                            Visibility="{Binding IsMtpSource, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="💾" FontSize="14" Margin="0,0,6,0"/>
+                            <TextBlock Text="Backup"/>
+                        </StackPanel>
+                    </Button>
 
-                <Button Grid.Column="4"
-                        Style="{StaticResource BaseButtonStyle}"
-                        Command="{Binding RefreshCommand}"
-                        ToolTip="Re-scan folder (clears cache)"
-                        AutomationProperties.Name="Re-scan folder"
-                        Visibility="{Binding HasFolder, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Text="↺ Reload"/>
-                </Button>
+                    <Button Grid.Column="4"
+                            Style="{StaticResource BaseButtonStyle}"
+                            Command="{Binding RefreshCommand}"
+                            ToolTip="Re-scan folder (clears cache)"
+                            AutomationProperties.Name="Re-scan folder"
+                            Visibility="{Binding HasFolder, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="↺ Reload"/>
+                    </Button>
 
-                <!-- Folder presets dropdown -->
-                <Button Grid.Column="5"
-                        x:Name="PresetsButton"
-                        Style="{StaticResource BaseButtonStyle}"
-                        Click="PresetsButton_Click"
-                        Margin="6,0,0,0"
-                        ToolTip="Pinned folders — quick access"
-                        AutomationProperties.Name="Pinned folders">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📌" FontSize="13" Margin="0,0,5,0"/>
-                        <TextBlock Text="Presets"/>
-                    </StackPanel>
-                </Button>
+                    <!-- Folder presets dropdown -->
+                    <Button Grid.Column="5"
+                            x:Name="PresetsButton"
+                            Style="{StaticResource BaseButtonStyle}"
+                            Click="PresetsButton_Click"
+                            Margin="6,0,0,0"
+                            ToolTip="Pinned folders — quick access"
+                            AutomationProperties.Name="Pinned folders">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📌" FontSize="13" Margin="0,0,5,0"/>
+                            <TextBlock Text="Presets"/>
+                        </StackPanel>
+                    </Button>
                 <Popup x:Name="PresetsPopup"
                        PlacementTarget="{Binding ElementName=PresetsButton}"
                        Placement="Bottom"
@@ -233,7 +234,39 @@
                         </StackPanel>
                     </Border>
                 </Popup>
-            </Grid>
+                </Grid>
+
+                <!-- Subfolder selection pill — shown when custom folders are active -->
+                <Border Margin="0,6,0,0"
+                        Visibility="{Binding HasCustomScanFolders, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Background="#1A7C3AED" BorderBrush="#7C3AED" BorderThickness="1"
+                                CornerRadius="6" Padding="10,4">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="📁" FontSize="12" Margin="0,0,6,0"
+                                           FontFamily="Segoe UI Emoji"/>
+                                <TextBlock Text="{Binding ScanFolderSummary}" FontSize="12"
+                                           Foreground="{StaticResource AccentBrandBrush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <Button Command="{Binding PickSubfoldersCommand}"
+                                Margin="8,0,0,0" Padding="8,4" FontSize="12"
+                                Style="{StaticResource BaseButtonStyle}"
+                                ToolTip="Change which subfolders to scan">
+                            <TextBlock Text="Change"/>
+                        </Button>
+                        <Button Command="{Binding PickSubfoldersCommand}"
+                                CommandParameter="all"
+                                Margin="4,0,0,0" Padding="8,4" FontSize="12"
+                                Style="{StaticResource BaseButtonStyle}"
+                                ToolTip="Clear folder selection and scan everything"
+                                Click="ClearSubfolderSelection_Click">
+                            <TextBlock Text="✕ Scan all"/>
+                        </Button>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
         </Border>
 
         <!-- ════════════════  FILTER BAR  ═══════════════════════════ -->
@@ -347,7 +380,7 @@
                 <Border x:Name="SubfolderPill"
                         CornerRadius="14"
                         Padding="10,4"
-                        Margin="0,0,16,0"
+                        Margin="0,0,8,0"
                         Cursor="Hand"
                         MouseLeftButtonUp="SubfolderPill_Click">
                     <Border.Style>
@@ -381,6 +414,18 @@
                                    Visibility="{Binding IncludeSubfolders, Converter={StaticResource BoolToVisInv}}"/>
                     </StackPanel>
                 </Border>
+
+                <!-- Select specific subfolders to scan (local folders only) -->
+                <Button Command="{Binding PickSubfoldersCommand}"
+                        Style="{StaticResource BaseButtonStyle}"
+                        Padding="9,4" Margin="0,0,16,0" FontSize="12"
+                        ToolTip="Choose which subfolders to include in the scan"
+                        Visibility="{Binding HasFolder, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🗂" FontSize="12" Margin="0,0,5,0" FontFamily="Segoe UI Emoji"/>
+                        <TextBlock Text="Select Folders"/>
+                    </StackPanel>
+                </Button>
 
                 <!-- Scan status indicator -->
                 <TextBlock FontSize="12" Foreground="{StaticResource AccentBucketBrush}"
