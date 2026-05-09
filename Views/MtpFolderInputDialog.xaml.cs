@@ -78,7 +78,7 @@ public partial class MtpFolderInputDialog : Window
         EmptyLabel.Visibility        = Visibility.Collapsed;
 
         List<string> subfolders;
-        try { subfolders = await Task.Run(() => MtpDeviceService.GetSubfolders(_deviceId, path)); }
+        try { subfolders = await MtpDeviceService.GetSubfoldersAsync(_deviceId, path); }
         catch { subfolders = []; }
 
         LoadingPanel.Visibility = Visibility.Collapsed;

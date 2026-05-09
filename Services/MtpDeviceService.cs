@@ -77,6 +77,26 @@ public static class MtpDeviceService
     }
 
     /// <summary>Returns immediate sub-directories of the given MTP path.</summary>
+    public static async Task<List<string>> GetSubfoldersAsync(string deviceId, string path)
+    {
+        try
+        {
+            return await RunStaFresh<List<string>>(() =>
+            {
+                using var device = OpenDevice(deviceId);
+                return device.GetDirectoryInfo(path)
+                    .EnumerateDirectories()
+                    .Select(d => d.FullName)
+                    .ToList();
+            });
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    // Kept for backward-compat callers that are already on the right thread
     public static List<string> GetSubfolders(string deviceId, string path)
     {
         using var device = OpenDevice(deviceId);

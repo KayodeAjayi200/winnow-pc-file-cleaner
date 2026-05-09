@@ -10,6 +10,57 @@
         Foreground="White"
         FontFamily="Segoe UI">
 
+    <Window.Resources>
+        <!-- Flat dark button that actually respects Background/Foreground -->
+        <Style x:Key="FlatBtn" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Transparent ghost button (breadcrumb / drill-in) -->
+        <Style x:Key="GhostBtn" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -30,13 +81,11 @@
                         FontSize="12"
                         Padding="10,5"
                         Margin="8,0,0,0"
-                        Cursor="Hand"
                         Click="Up_Click"
                         IsEnabled="False"
                         Background="#2a2a45"
                         Foreground="White"
-                        BorderThickness="1"
-                        BorderBrush="#3a3a55"/>
+                        Style="{StaticResource FlatBtn}"/>
                 <ScrollViewer HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Disabled">
                     <ItemsControl x:Name="BreadcrumbControl" VerticalAlignment="Center">
@@ -48,15 +97,14 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="{Binding Label}"
+                                     <Button Content="{Binding Label}"
                                             Tag="{Binding}"
                                             Click="BreadcrumbSegment_Click"
                                             FontSize="12"
                                             Foreground="#a0a0c0"
                                             Background="Transparent"
-                                            BorderThickness="0"
                                             Padding="2,0"
-                                            Cursor="Hand"/>
+                                            Style="{StaticResource GhostBtn}"/>
                                     <TextBlock Text=" ›"
                                                Foreground="#444466"
                                                FontSize="13"
@@ -118,12 +166,11 @@
                                             Click="DrillIn_Click"
                                             Background="Transparent"
                                             Foreground="#7C3AED"
-                                            BorderThickness="0"
                                             Padding="12,8"
                                             FontSize="20"
                                             FontWeight="Bold"
-                                            Cursor="Hand"
-                                            ToolTip="Open this folder"/>
+                                            ToolTip="Open this folder"
+                                            Style="{StaticResource GhostBtn}"/>
                                     <!-- Checkbox -->
                                     <CheckBox DockPanel.Dock="Left"
                                               IsChecked="{Binding IsChecked, Mode=TwoWay}"
@@ -165,22 +212,20 @@
                         DockPanel.Dock="Left"
                         Background="#2a2a45"
                         Foreground="White"
-                        BorderThickness="0"
                         Padding="16,8"
                         FontSize="13"
-                        Cursor="Hand"/>
+                        Style="{StaticResource FlatBtn}"/>
                 <Button x:Name="ConfirmBtn"
                         DockPanel.Dock="Right"
                         Content="✓  Confirm Selection"
                         Click="Select_Click"
                         Background="#7C3AED"
                         Foreground="White"
-                        BorderThickness="0"
                         Padding="18,8"
                         FontSize="13"
                         FontWeight="SemiBold"
-                        Cursor="Hand"
-                        IsEnabled="False"/>
+                        IsEnabled="False"
+                        Style="{StaticResource FlatBtn}"/>
                 <TextBlock x:Name="SelectionCountLabel"
                            Text="Check folders to select · › to open"
                            FontSize="11"

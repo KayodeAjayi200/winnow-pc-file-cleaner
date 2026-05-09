@@ -139,6 +139,13 @@
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="Padding" Value="4,3"/>
                                 <Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="HeaderTemplate">
+                                    <Setter.Value>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" Foreground="White"/>
+                                        </DataTemplate>
+                                    </Setter.Value>
+                                </Setter>
                                 <EventSetter Event="Expanded" Handler="TreeViewItem_Expanded"/>
                                 <Style.Triggers>
                                     <Trigger Property="IsSelected" Value="True">
@@ -147,6 +154,11 @@
                                 </Style.Triggers>
                             </Style>
                         </TreeView.ItemContainerStyle>
+                        <TreeView.ItemTemplate>
+                            <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                <TextBlock Text="{Binding Header}" Foreground="White"/>
+                            </HierarchicalDataTemplate>
+                        </TreeView.ItemTemplate>
                     </TreeView>
                     <TextBlock x:Name="FolderHint"
                                Text="← Select a device to see its folders"
