@@ -842,9 +842,21 @@ public static class MtpDeviceService
 
     private static MediaDevice OpenDevice(string deviceId)
     {
-        var device = MediaDevice.GetDevices().First(d => d.DeviceId == deviceId);
-        device.Connect();
-        return device;
+        // Try up to 3 times — device may briefly disappear from WPD after a
+        // copy/disconnect event before being re-enumerated.
+        for (int attempt = 1; attempt <= 3; attempt++)
+        {
+            var device = MediaDevice.GetDevices().FirstOrDefault(d => d.DeviceId == deviceId);
+            if (device != null)
+            {
+                device.Connect();
+                return device;
+            }
+            if (attempt < 3)
+                System.Threading.Thread.Sleep(800 * attempt);
+        }
+        throw new InvalidOperationException(
+            "Device not found. Make sure it is connected, unlocked, and set to File Transfer mode.");
     }
 
     private static DateTime? GetDateCutoff(DateFilter filter) => filter switch
