@@ -67,6 +67,7 @@ public partial class MtpCopyWindow : Window
     private string          _destPath = string.Empty;
     private CancellationTokenSource? _cts;
     private bool _copying;
+    private List<string>? _lastCopiedPaths;
 
     private readonly ObservableCollection<FolderItem> _folders = new();
 
@@ -205,7 +206,7 @@ public partial class MtpCopyWindow : Window
     private async void ChangeSource_Click(object sender, RoutedEventArgs e)
     {
         _sizeCts?.Cancel();
-        var win = new MtpFolderInputDialog(_deviceId) { Owner = this };
+        var win = new MtpFolderInputDialog(_deviceId, _sourcePath) { Owner = this };
         if (win.ShowDialog() == true && win.SelectedPath is { } newPath)
         {
             _sourcePath         = newPath;
@@ -391,6 +392,10 @@ public partial class MtpCopyWindow : Window
             ProgressPctText.Text  = "Done";
             CurrentFileText.Text  = string.Empty;
             SummaryText.Text      = "Copy finished successfully";
+
+            // Show delete-from-device button
+            _lastCopiedPaths = selectedPaths;
+            DeleteFromDeviceBtn.Visibility = Visibility.Visible;
         }
         catch (OperationCanceledException)
         {
@@ -412,6 +417,52 @@ public partial class MtpCopyWindow : Window
             _copying          = false;
             CancelBtn.Content = "Close";
             RefreshCopyBtn();
+        }
+    }
+
+    private async void DeleteFromDevice_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastCopiedPaths is not { Count: > 0 }) return;
+
+        int count  = _lastCopiedPaths.Count;
+        string msg = count == 1
+            ? $"Permanently delete '{System.IO.Path.GetFileName(_lastCopiedPaths[0].TrimEnd('\\'))}' from the device?\n\nThis cannot be undone."
+            : $"Permanently delete {count} folders from the device?\n\nThis cannot be undone.";
+
+        var result = System.Windows.MessageBox.Show(
+            msg, "Delete from Device",
+            MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        DeleteFromDeviceBtn.IsEnabled = false;
+        ProgressLabel.Text            = "🗑 Deleting from device…";
+        ProgressPctText.Text          = "…";
+        CopyProgressBar.IsIndeterminate = true;
+        CopyProgressBar.Value           = 0;
+        ProgressPanel.Visibility        = Visibility.Visible;
+
+        var delProgress = new Progress<string>(msg => ProgressLabel.Text = msg);
+        using var cts   = new CancellationTokenSource();
+
+        try
+        {
+            await MtpDeviceService.DeleteFoldersAsync(
+                _deviceId, _lastCopiedPaths, delProgress, cts.Token);
+
+            CopyProgressBar.IsIndeterminate = false;
+            CopyProgressBar.Value           = 100;
+            ProgressLabel.Text              = "🗑 Deleted from device";
+            ProgressPctText.Text            = "Done";
+            SummaryText.Text                = "Folders deleted from device";
+        }
+        catch (Exception ex)
+        {
+            CopyProgressBar.IsIndeterminate = false;
+            System.Windows.MessageBox.Show(
+                $"Delete failed:\n{ex.Message}",
+                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            ProgressLabel.Text            = "❌ Delete failed";
+            DeleteFromDeviceBtn.IsEnabled = true;
         }
     }
 

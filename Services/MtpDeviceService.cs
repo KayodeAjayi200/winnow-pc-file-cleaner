@@ -635,6 +635,70 @@ public static class MtpDeviceService
         }
     }
 
+    /// <summary>
+    /// Recursively deletes one or more folders from the device.
+    /// Files are deleted first, then directories bottom-up.
+    /// MTP has no Recycle Bin — this is irreversible.
+    /// </summary>
+    public static async Task DeleteFoldersAsync(
+        string deviceId,
+        IList<string> folderPaths,
+        IProgress<string>? progress = null,
+        CancellationToken ct = default)
+    {
+        await _deviceSemaphore.WaitAsync(ct);
+        try
+        {
+            await RunStaFreshVoid(() =>
+            {
+                using var device = OpenDevice(deviceId);
+                foreach (var folder in folderPaths)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    string name = System.IO.Path.GetFileName(folder.TrimEnd('\\'));
+                    progress?.Report($"Deleting {name}…");
+                    DeleteFolderRecursive(device, folder, ct);
+                }
+            }, ct);
+        }
+        finally
+        {
+            _deviceSemaphore.Release();
+        }
+    }
+
+    private static void DeleteFolderRecursive(MediaDevice device, string path, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        // Delete files in this directory
+        try
+        {
+            foreach (var file in device.EnumerateFiles(path, "*", SearchOption.TopDirectoryOnly))
+            {
+                ct.ThrowIfCancellationRequested();
+                try { device.DeleteFile(file); } catch { }
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { }
+
+        // Recurse into sub-directories (delete children before parent)
+        try
+        {
+            foreach (var sub in device.EnumerateDirectories(path))
+            {
+                ct.ThrowIfCancellationRequested();
+                DeleteFolderRecursive(device, sub, ct);
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { }
+
+        // Now delete the (hopefully empty) directory
+        try { device.DeleteDirectory(path); } catch { }
+    }
+
     // ── Persistent STA thread ─────────────────────────────────────────────────
     //
     // WPD COM objects are STA-bound.  Spinning a new STA thread per call releases

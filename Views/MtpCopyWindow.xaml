@@ -327,18 +327,32 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <TextBlock x:Name="SummaryText"
                        Foreground="#888" FontSize="12"
                        VerticalAlignment="Center"/>
 
-            <Button Grid.Column="1" x:Name="CancelBtn"
+            <!-- Appears after a successful copy -->
+            <Button Grid.Column="1" x:Name="DeleteFromDeviceBtn"
+                    Content="🗑 Delete from Device"
+                    FontSize="12"
+                    Padding="12,7"
+                    Margin="0,0,10,0"
+                    Cursor="Hand"
+                    Visibility="Collapsed"
+                    Click="DeleteFromDevice_Click"
+                    Background="#7f1d1d"
+                    Foreground="White"
+                    BorderThickness="0"/>
+
+            <Button Grid.Column="2" x:Name="CancelBtn"
                     Content="Cancel" Style="{StaticResource SecondaryBtn}"
                     Margin="0,0,10,0"
                     Click="Cancel_Click"/>
 
-            <Button Grid.Column="2" x:Name="CopyBtn"
+            <Button Grid.Column="3" x:Name="CopyBtn"
                     Content="Copy Selected"
                     Style="{StaticResource PrimaryBtn}"
                     IsEnabled="False"
