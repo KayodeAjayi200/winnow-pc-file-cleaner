@@ -191,9 +191,20 @@
                     <StackPanel x:Name="FolderLoadingPanel"
                                 HorizontalAlignment="Center" VerticalAlignment="Center"
                                 Visibility="Collapsed">
-                        <TextBlock Text="⏳  Loading…" FontSize="13" Foreground="#888"
+                        <TextBlock Text="⏳" FontSize="20" HorizontalAlignment="Center"
+                                   Margin="0,0,0,4"/>
+                        <TextBlock x:Name="FolderLoadingText"
+                                   Text="Loading folders…" FontSize="12" Foreground="#888"
                                    HorizontalAlignment="Center"/>
                     </StackPanel>
+
+                    <!-- Error state -->
+                    <TextBlock x:Name="FolderErrorLabel"
+                               FontSize="12" Foreground="#EF4444"
+                               TextWrapping="Wrap"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Margin="12" TextAlignment="Center"
+                               Visibility="Collapsed"/>
 
                     <!-- Empty state -->
                     <TextBlock x:Name="FolderEmptyLabel"

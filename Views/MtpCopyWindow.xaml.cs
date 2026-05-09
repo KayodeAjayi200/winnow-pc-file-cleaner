@@ -63,7 +63,7 @@ public partial class MtpCopyWindow : Window
     // ── Fields ─────────────────────────────────────────────────────────────────
 
     private readonly string _deviceId;
-    private string          _sourcePath;
+    private List<string>    _sourcePaths;
     private string          _destPath = string.Empty;
     private CancellationTokenSource? _cts;
     private bool _copying;
@@ -73,14 +73,16 @@ public partial class MtpCopyWindow : Window
 
     // ── Constructor ────────────────────────────────────────────────────────────
 
-    public MtpCopyWindow(string deviceId, string deviceName, string sourcePath)
+    public MtpCopyWindow(string deviceId, string deviceName, List<string> sourcePaths)
     {
         InitializeComponent();
-        _deviceId   = deviceId;
-        _sourcePath = sourcePath;
+        _deviceId    = deviceId;
+        _sourcePaths = sourcePaths;
 
         DeviceNameText.Text  = $"Device: {deviceName}";
-        SourcePathText.Text  = sourcePath;
+        SourcePathText.Text  = sourcePaths.Count == 1
+            ? sourcePaths[0]
+            : $"{sourcePaths.Count} folders selected";
         FoldersItemsControl.ItemsSource = _folders;
 
         Loaded += async (_, _) => await LoadFoldersAsync();
@@ -109,46 +111,55 @@ public partial class MtpCopyWindow : Window
         _folders.Clear();
         SetLoadingStatus("Connecting to device…", "Pausing any active scan");
 
-        // ── Phase 1: list folder names ────────────────────────────────────────
-        // GetSubfoldersQuickAsync now waits (indefinitely) for the device semaphore,
-        // so no retry loop needed. Transient failures still throw and show an error.
-        List<MtpFolderInfo>? infos = null;
-        try
+        // ── Phase 1: build folder list ────────────────────────────────────────
+        if (_sourcePaths.Count > 1)
         {
-            infos = await MtpDeviceService.GetSubfoldersQuickAsync(
-                _deviceId, _sourcePath, sizeCt);
-        }
-        catch (OperationCanceledException) { return; }
-        catch (Exception ex)
-        {
-            LoadingPanel.Visibility = Visibility.Collapsed;
-            EmptyText.Text          = $"Could not connect to device:\n{ex.Message}";
-            EmptyText.Visibility    = Visibility.Visible;
-            return;
-        }
-
-        if (infos == null || sizeCt.IsCancellationRequested) return;
-
-        SetLoadingStatus("Loading folders…");
-        _folders.Clear();
-        foreach (var info in infos.OrderByDescending(i => i.Name))
-            _folders.Add(new FolderItem { Path = info.Path, DisplayName = info.Name });
-
-        LoadingPanel.Visibility = Visibility.Collapsed;
-
-        if (_folders.Count == 0)
-        {
-            // The selected path has no sub-folders — it IS a leaf folder.
-            // Add it as the single item so the user can copy it directly.
-            string leafName = System.IO.Path.GetFileName(_sourcePath.TrimEnd('\\', '/'));
-            _folders.Add(new FolderItem
+            // Multiple folders already selected — they ARE the items; no lookup needed
+            SetLoadingStatus("Loading folders…");
+            foreach (var p in _sourcePaths)
             {
-                Path        = _sourcePath,
-                DisplayName = string.IsNullOrEmpty(leafName) ? _sourcePath : leafName
-            });
-            EmptyText.Visibility = Visibility.Collapsed;
+                string displayName = System.IO.Path.GetFileName(p.TrimEnd('\\', '/'));
+                if (string.IsNullOrEmpty(displayName)) displayName = p;
+                _folders.Add(new FolderItem { Path = p, DisplayName = displayName });
+            }
+        }
+        else
+        {
+            // Single path — list its sub-folders; if none, the path itself is the leaf
+            List<MtpFolderInfo>? infos = null;
+            try
+            {
+                infos = await MtpDeviceService.GetSubfoldersQuickAsync(
+                    _deviceId, _sourcePaths[0], sizeCt);
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex)
+            {
+                LoadingPanel.Visibility = Visibility.Collapsed;
+                EmptyText.Text          = $"Could not connect to device:\n{ex.Message}";
+                EmptyText.Visibility    = Visibility.Visible;
+                return;
+            }
+
+            if (infos == null || sizeCt.IsCancellationRequested) return;
+
+            SetLoadingStatus("Loading folders…");
+            foreach (var info in infos.OrderByDescending(i => i.Name))
+                _folders.Add(new FolderItem { Path = info.Path, DisplayName = info.Name });
+
+            if (_folders.Count == 0)
+            {
+                // No sub-folders — the selected path IS the leaf
+                string leafName = System.IO.Path.GetFileName(_sourcePaths[0].TrimEnd('\\', '/'));
+                _folders.Add(new FolderItem
+                {
+                    Path        = _sourcePaths[0],
+                    DisplayName = string.IsNullOrEmpty(leafName) ? _sourcePaths[0] : leafName
+                });
+            }
         }
 
+        LoadingPanel.Visibility       = Visibility.Collapsed;
         FolderScrollViewer.Visibility = Visibility.Visible;
         UpdateSummary();
         RefreshCopyBtn();
@@ -184,9 +195,10 @@ public partial class MtpCopyWindow : Window
     private async void ChangeSource_Click(object sender, RoutedEventArgs e)
     {
         _sizeCts?.Cancel();
-        var win = new MtpFolderInputDialog(_deviceId, _sourcePath) { Owner = this };
+        var win = new MtpFolderInputDialog(_deviceId, _sourcePaths.Count == 1 ? _sourcePaths[0] : "") { Owner = this };
         if (win.ShowDialog() == true && win.SelectedPaths.Count > 0)
         {
+            _sourcePaths = win.SelectedPaths;
             _sizeCts = new CancellationTokenSource();
             var sizeCt = _sizeCts.Token;
 

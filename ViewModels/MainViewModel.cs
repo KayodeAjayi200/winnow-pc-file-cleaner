@@ -397,6 +397,8 @@ public class MainViewModel : INotifyPropertyChanged
     public string? MtpDeviceName => _isMtpSource ? _mtpDeviceName : null;
     /// <summary>The MTP folder path currently being browsed (same as FolderPath for MTP).</summary>
     public string? MtpFolderPath => _isMtpSource ? FolderPath : null;
+    /// <summary>The actual MTP folder paths (list) — safe to pass to copy/backup windows.</summary>
+    public List<string> MtpFolderPaths => _isMtpSource ? [.._mtpFolderPaths] : [];
 
     // ── Buckets ────────────────────────────────────────────────────────────────
 

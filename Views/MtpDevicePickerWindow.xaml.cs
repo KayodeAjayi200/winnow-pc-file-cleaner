@@ -20,6 +20,7 @@ public partial class MtpDevicePickerWindow : Window
 
     private string _currentDeviceId = string.Empty;
     private string _currentPath     = string.Empty;
+    private CancellationTokenSource _navCts = new();
 
     private readonly HashSet<string> _checkedPaths = [];
     private readonly List<(string Label, string Path)> _breadcrumb = [];
@@ -123,6 +124,11 @@ public partial class MtpDevicePickerWindow : Window
 
     private async Task NavigateFolderAsync(string path, string? label = null)
     {
+        // Cancel any in-flight navigation
+        _navCts.Cancel();
+        _navCts = new CancellationTokenSource();
+        var ct = _navCts.Token;
+
         _currentPath = path;
         label ??= System.IO.Path.GetFileName(path.TrimEnd('\\')) is { Length: > 0 } n ? n : path;
 
@@ -140,34 +146,53 @@ public partial class MtpDevicePickerWindow : Window
 
         FolderHint.Visibility         = Visibility.Collapsed;
         FolderLoadingPanel.Visibility  = Visibility.Visible;
+        FolderLoadingText.Text         = "Loading folders…";
         FolderScrollViewer.Visibility  = Visibility.Collapsed;
         FolderEmptyLabel.Visibility    = Visibility.Collapsed;
+        FolderErrorLabel.Visibility    = Visibility.Collapsed;
 
-        List<string> subs;
+        // Show a "waiting" hint after a short delay so the user knows why it's slow
+        var hintTimer = Task.Delay(800, ct).ContinueWith(_ =>
+        {
+            if (!ct.IsCancellationRequested)
+                Dispatcher.BeginInvoke(() => FolderLoadingText.Text = "Waiting for scan to pause…");
+        }, TaskScheduler.Default);
+
+        List<MtpFolderInfo> folderInfos;
         try
         {
-            subs = path == ""
-                ? await MtpDeviceService.GetRootFoldersAsync(_currentDeviceId)
-                : await MtpDeviceService.GetSubfoldersAsync(_currentDeviceId, path);
+            folderInfos = await MtpDeviceService.GetFoldersQuickAsync(_currentDeviceId, path, ct);
         }
-        catch { subs = []; }
+        catch (OperationCanceledException)
+        {
+            return; // navigated elsewhere — silently discard
+        }
+        catch (Exception ex)
+        {
+            FolderLoadingPanel.Visibility = Visibility.Collapsed;
+            FolderErrorLabel.Text         = $"Could not load folders: {ex.Message}";
+            FolderErrorLabel.Visibility   = Visibility.Visible;
+            return;
+        }
+
+        if (ct.IsCancellationRequested) return;
 
         FolderLoadingPanel.Visibility = Visibility.Collapsed;
 
-        if (subs.Count == 0)
+        if (folderInfos.Count == 0)
         {
             FolderEmptyLabel.Visibility = Visibility.Visible;
         }
         else
         {
-            var items = subs
-                .Select(p =>
+            var items = folderInfos
+                .Select(info =>
                 {
                     var entry = new FolderEntry
                     {
-                        Name      = System.IO.Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p,
-                        Path      = p,
-                        IsChecked = _checkedPaths.Contains(p)
+                        Name      = info.Name,
+                        Path      = info.Path,
+                        IsChecked = _checkedPaths.Contains(info.Path)
                     };
                     entry.PropertyChanged += (_, ev) =>
                     {
@@ -207,6 +232,8 @@ public partial class MtpDevicePickerWindow : Window
 
     private void ResetFolderPanel()
     {
+        _navCts.Cancel();
+        _navCts = new CancellationTokenSource();
         _currentDeviceId = string.Empty;
         _currentPath     = string.Empty;
         _checkedPaths.Clear();
@@ -217,6 +244,7 @@ public partial class MtpDevicePickerWindow : Window
         FolderLoadingPanel.Visibility  = Visibility.Collapsed;
         FolderScrollViewer.Visibility  = Visibility.Collapsed;
         FolderEmptyLabel.Visibility    = Visibility.Collapsed;
+        FolderErrorLabel.Visibility    = Visibility.Collapsed;
         BreadcrumbBar.Visibility       = Visibility.Collapsed;
         FolderUpBtn.IsEnabled          = false;
         SelectedPathText.Text          = string.Empty;

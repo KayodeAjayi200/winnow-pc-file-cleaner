@@ -395,6 +395,40 @@ public static class MtpDeviceService
     // ── Folder metadata ───────────────────────────────────────────────────────
 
     /// <summary>
+    /// Lists immediate sub-directories of <paramref name="path"/> (or root storage
+    /// folders when <paramref name="path"/> is empty/null).  Waits for any active
+    /// scan to pause before opening the device, so it never competes for the WPD
+    /// connection and never hangs.
+    /// </summary>
+    public static async Task<List<MtpFolderInfo>> GetFoldersQuickAsync(
+        string deviceId, string path, CancellationToken ct = default)
+    {
+        bool acquired = await YieldDeviceAsync(ct);
+        if (!acquired) return [];
+        try
+        {
+            return await RunStaFresh<List<MtpFolderInfo>>(() =>
+            {
+                using var device = OpenDevice(deviceId);
+                IEnumerable<MediaDevices.MediaDirectoryInfo> dirs = string.IsNullOrEmpty(path)
+                    ? device.GetRootDirectory().EnumerateDirectories()
+                    : device.GetDirectoryInfo(path).EnumerateDirectories();
+                var result = new List<MtpFolderInfo>();
+                foreach (var sub in dirs)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
+                }
+                return result;
+            }, ct);
+        }
+        finally
+        {
+            _deviceSemaphore.Release();
+        }
+    }
+
+    /// <summary>
     /// Phase 1 (fast): returns sub-directory names immediately — no size calculation.
     /// Call <see cref="CalculateFolderSizesAsync"/> afterwards to fill in sizes.
     /// </summary>

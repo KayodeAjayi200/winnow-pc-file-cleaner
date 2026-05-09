@@ -261,9 +261,10 @@ public partial class MainWindow : Window
 
     private void BackupDeviceButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.MtpDeviceId == null || _vm.MtpFolderPath == null) return;
-        var win = new Views.MtpCopyWindow(_vm.MtpDeviceId, _vm.MtpDeviceName ?? "Device",
-                                          _vm.MtpFolderPath)
+        if (_vm.MtpDeviceId == null) return;
+        var paths = _vm.MtpFolderPaths;
+        if (paths.Count == 0) return;
+        var win = new Views.MtpCopyWindow(_vm.MtpDeviceId, _vm.MtpDeviceName ?? "Device", paths)
         {
             Owner = this
         };
