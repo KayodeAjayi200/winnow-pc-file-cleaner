@@ -199,12 +199,19 @@
                     </StackPanel>
 
                     <!-- Error state -->
-                    <TextBlock x:Name="FolderErrorLabel"
-                               FontSize="12" Foreground="#EF4444"
-                               TextWrapping="Wrap"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Margin="12" TextAlignment="Center"
-                               Visibility="Collapsed"/>
+                    <StackPanel x:Name="FolderErrorPanel" Orientation="Vertical"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Margin="12" Visibility="Collapsed">
+                        <TextBlock x:Name="FolderErrorLabel"
+                                   FontSize="12" Foreground="#EF4444"
+                                   TextWrapping="Wrap" TextAlignment="Center"
+                                   Margin="0,0,0,10"/>
+                        <Button x:Name="FolderRetryBtn" Content="↺  Retry"
+                                Click="FolderRetry_Click"
+                                Style="{StaticResource ActionBtn}"
+                                Background="#2a2a45"
+                                HorizontalAlignment="Center"/>
+                    </StackPanel>
 
                     <!-- Empty state -->
                     <TextBlock x:Name="FolderEmptyLabel"

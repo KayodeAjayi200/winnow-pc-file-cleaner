@@ -149,13 +149,13 @@ public partial class MtpDevicePickerWindow : Window
         FolderLoadingText.Text         = "Loading folders…";
         FolderScrollViewer.Visibility  = Visibility.Collapsed;
         FolderEmptyLabel.Visibility    = Visibility.Collapsed;
-        FolderErrorLabel.Visibility    = Visibility.Collapsed;
+        FolderErrorPanel.Visibility    = Visibility.Collapsed;
 
-        // Show a "waiting" hint after a short delay so the user knows why it's slow
-        var hintTimer = Task.Delay(800, ct).ContinueWith(_ =>
+        // Show a "still loading" hint after 1s so the user knows something is happening
+        _ = Task.Delay(1000, ct).ContinueWith(_ =>
         {
             if (!ct.IsCancellationRequested)
-                Dispatcher.BeginInvoke(() => FolderLoadingText.Text = "Waiting for scan to pause…");
+                Dispatcher.BeginInvoke(() => FolderLoadingText.Text = "Still connecting to device…");
         }, TaskScheduler.Default);
 
         List<MtpFolderInfo> folderInfos;
@@ -171,7 +171,7 @@ public partial class MtpDevicePickerWindow : Window
         {
             FolderLoadingPanel.Visibility = Visibility.Collapsed;
             FolderErrorLabel.Text         = $"Could not load folders: {ex.Message}";
-            FolderErrorLabel.Visibility   = Visibility.Visible;
+            FolderErrorPanel.Visibility   = Visibility.Visible;
             return;
         }
 
@@ -244,7 +244,7 @@ public partial class MtpDevicePickerWindow : Window
         FolderLoadingPanel.Visibility  = Visibility.Collapsed;
         FolderScrollViewer.Visibility  = Visibility.Collapsed;
         FolderEmptyLabel.Visibility    = Visibility.Collapsed;
-        FolderErrorLabel.Visibility    = Visibility.Collapsed;
+        FolderErrorPanel.Visibility    = Visibility.Collapsed;
         BreadcrumbBar.Visibility       = Visibility.Collapsed;
         FolderUpBtn.IsEnabled          = false;
         SelectedPathText.Text          = string.Empty;
@@ -264,6 +264,9 @@ public partial class MtpDevicePickerWindow : Window
         var parent = _breadcrumb[^2];
         await NavigateFolderAsync(parent.Path, parent.Label);
     }
+
+    private async void FolderRetry_Click(object sender, RoutedEventArgs e)
+        => await NavigateFolderAsync(_currentPath);
 
     private async void FolderDrillIn_Click(object sender, RoutedEventArgs e)
     {

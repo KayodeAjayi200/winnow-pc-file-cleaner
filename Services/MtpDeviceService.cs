@@ -403,29 +403,51 @@ public static class MtpDeviceService
     public static async Task<List<MtpFolderInfo>> GetFoldersQuickAsync(
         string deviceId, string path, CancellationToken ct = default)
     {
-        bool acquired = await YieldDeviceAsync(ct);
-        if (!acquired) return [];
+        // Browse is read-only — do NOT fire BeforeExclusiveDeviceAccess (that would cancel
+        // an active scan and cause the device to disconnect briefly). Just open directly
+        // on a fresh STA thread. Retry up to 4 times to handle transient WPD issues.
+        Exception? lastEx = null;
+        int[] delays = [0, 600, 1200, 2000];
+        foreach (int delay in delays)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (delay > 0) await Task.Delay(delay, ct);
+            try
+            {
+                return await RunStaFresh<List<MtpFolderInfo>>(() =>
+                {
+                    using var device = OpenDeviceQuiet(deviceId)
+                        ?? throw new InvalidOperationException(
+                            "Device not found. Make sure it is connected, unlocked, and trusted.");
+                    IEnumerable<MediaDevices.MediaDirectoryInfo> dirs = string.IsNullOrEmpty(path)
+                        ? device.GetRootDirectory().EnumerateDirectories()
+                        : device.GetDirectoryInfo(path).EnumerateDirectories();
+                    var result = new List<MtpFolderInfo>();
+                    foreach (var sub in dirs)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
+                    }
+                    return result;
+                }, ct);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { lastEx = ex; }
+        }
+        throw lastEx!;
+    }
+
+    /// <summary>Opens a device without throwing — returns null if not found.</summary>
+    private static MediaDevice? OpenDeviceQuiet(string deviceId)
+    {
         try
         {
-            return await RunStaFresh<List<MtpFolderInfo>>(() =>
-            {
-                using var device = OpenDevice(deviceId);
-                IEnumerable<MediaDevices.MediaDirectoryInfo> dirs = string.IsNullOrEmpty(path)
-                    ? device.GetRootDirectory().EnumerateDirectories()
-                    : device.GetDirectoryInfo(path).EnumerateDirectories();
-                var result = new List<MtpFolderInfo>();
-                foreach (var sub in dirs)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
-                }
-                return result;
-            }, ct);
+            var dev = MediaDevice.GetDevices().FirstOrDefault(d => d.DeviceId == deviceId);
+            if (dev == null) return null;
+            dev.Connect();
+            return dev;
         }
-        finally
-        {
-            _deviceSemaphore.Release();
-        }
+        catch { return null; }
     }
 
     /// <summary>
