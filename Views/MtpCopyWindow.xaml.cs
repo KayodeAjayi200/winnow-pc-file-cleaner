@@ -286,6 +286,11 @@ public partial class MtpCopyWindow : Window
         var selectedPaths = _folders.Where(f => f.IsSelected).Select(f => f.Path).ToList();
         if (selectedPaths.Count == 0 || string.IsNullOrEmpty(_destPath)) return;
 
+        // Cancel background size-calculation — it holds the device semaphore and
+        // would block the copy from starting until ALL folders are scanned.
+        _sizeCts?.Cancel();
+        _sizeCts = null;
+
         _copying           = true;
         _cts               = new CancellationTokenSource();
         CopyBtn.IsEnabled  = false;
