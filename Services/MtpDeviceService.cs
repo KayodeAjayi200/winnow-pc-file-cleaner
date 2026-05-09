@@ -255,8 +255,7 @@ public static class MtpDeviceService
     {
         try
         {
-            // Run synchronously on a fresh STA thread
-            return RunStaFresh<string>(() =>
+            return RunSta<string>(() =>
             {
                 var device = MediaDevice.GetDevices().FirstOrDefault(d => d.DeviceId == deviceId);
                 if (device == null) return "Device";
@@ -286,7 +285,7 @@ public static class MtpDeviceService
         if (!acquired) return null;   // cancelled before we could get the device
         try
         {
-            return await RunStaFresh<string?>(() =>
+            return await RunSta<string?>(() =>
             {
                 try
                 {
@@ -304,7 +303,7 @@ public static class MtpDeviceService
                 }
                 catch (OperationCanceledException) { return null; }
                 catch { return null; }
-            }, ct);
+            });
         }
         finally
         {
@@ -474,7 +473,7 @@ public static class MtpDeviceService
         if (!acquired) return [];
         try
         {
-            return await RunStaFresh<List<MtpFolderInfo>>(() =>
+            return await RunSta<List<MtpFolderInfo>>(() =>
             {
                 using var device = OpenDevice(deviceId);
                 var dir = device.GetDirectoryInfo(path);
@@ -485,7 +484,7 @@ public static class MtpDeviceService
                     result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
                 }
                 return result;
-            }, ct);
+            });
         }
         finally
         {
@@ -507,7 +506,7 @@ public static class MtpDeviceService
         await _deviceSemaphore.WaitAsync(ct);
         try
         {
-            await RunStaFreshVoid(() =>
+            await RunSta(() =>
             {
                 using var device = OpenDevice(deviceId);
                 foreach (var folderPath in folderPaths)
@@ -733,8 +732,12 @@ public static class MtpDeviceService
     {
         try
         {
-            using var device = OpenDevice(deviceId);
-            device.DeleteFile(mtpPath);
+            // Must run on the shared STA thread — WPD COM proxies have STA affinity.
+            RunSta(() =>
+            {
+                using var device = OpenDevice(deviceId);
+                device.DeleteFile(mtpPath);
+            }).GetAwaiter().GetResult();
             return true;
         }
         catch
@@ -754,10 +757,13 @@ public static class MtpDeviceService
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
-        await _deviceSemaphore.WaitAsync(ct);
+        // Cancel any active scan and acquire exclusive device access.
+        // Must use the shared STA thread — WPD COM proxies have STA affinity.
+        bool acquired = await YieldDeviceAsync(ct);
+        if (!acquired) return;
         try
         {
-            await RunStaFreshVoid(() =>
+            await RunSta(() =>
             {
                 using var device = OpenDevice(deviceId);
                 foreach (var folder in folderPaths)
