@@ -32,6 +32,9 @@ public partial class FilePreviewControl : UserControl
     private string? _loadingPath;
     private bool    _videoPlaying;
 
+    // Tracks the last temp file opened via an external app so we can clean it up
+    private static string? _lastOpenedExternalTemp;
+
     // Text extensions we show inline
     private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -51,6 +54,7 @@ public partial class FilePreviewControl : UserControl
 
     public static void OpenInDefaultApp(string path)
     {
+        DeleteLastExternalTemp();
         try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
         catch (Exception ex)
         {
@@ -149,6 +153,10 @@ public partial class FilePreviewControl : UserControl
             return;
         }
 
+        // Delete the previously opened temp file (best-effort; may still be open)
+        DeleteLastExternalTemp();
+        _lastOpenedExternalTemp = tempPath;
+
         try { Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true }); }
         catch (Exception ex)
         {
@@ -157,6 +165,14 @@ public partial class FilePreviewControl : UserControl
                 "Open failed", System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Warning);
         }
+    }
+
+    private static void DeleteLastExternalTemp()
+    {
+        var f = _lastOpenedExternalTemp;
+        if (f == null) return;
+        _lastOpenedExternalTemp = null;
+        try { System.IO.File.Delete(f); } catch { /* may still be open in external app */ }
     }
 
     /// Opens Windows Explorer with the file pre-selected (local files only).
