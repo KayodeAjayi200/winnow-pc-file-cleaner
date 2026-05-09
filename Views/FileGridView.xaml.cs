@@ -29,7 +29,19 @@ public partial class FileGridView : UserControl
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        if (e.OldValue is MainViewModel oldVm)
+            oldVm.PropertyChanged -= Vm_PropertyChanged;
+
         if (e.NewValue is MainViewModel vm)
+        {
+            TileList.ItemsSource = vm.AllFiles;
+            vm.PropertyChanged  += Vm_PropertyChanged;
+        }
+    }
+
+    private void Vm_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.AllFiles) && sender is MainViewModel vm)
             TileList.ItemsSource = vm.AllFiles;
     }
 

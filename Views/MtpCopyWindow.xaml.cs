@@ -483,6 +483,9 @@ public partial class MtpCopyWindow : Window
             ProgressLabel.Text              = "🗑 Deleted from device";
             ProgressPctText.Text            = "Done";
             SummaryText.Text                = "Folders deleted from device";
+            // Hide the delete button — nothing left to delete
+            DeleteFromDeviceBtn.Visibility  = Visibility.Collapsed;
+            _lastCopiedPaths                = null;
         }
         catch (Exception ex)
         {
