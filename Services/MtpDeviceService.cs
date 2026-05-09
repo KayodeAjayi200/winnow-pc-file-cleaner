@@ -403,19 +403,20 @@ public static class MtpDeviceService
     public static async Task<List<MtpFolderInfo>> GetFoldersQuickAsync(
         string deviceId, string path, CancellationToken ct = default)
     {
-        // iPhones (and most MTP devices) allow only ONE WPD connection at a time.
-        // We must have exclusive access before opening the device.
-        // Cancel any active scan and wait for it to release the semaphore — this is
-        // the only safe way to get a connection while a scan may be running.
+        // iPhones allow only ONE WPD connection at a time — we need exclusive access.
+        // Cancel any active scan, then wait for its semaphore to be released.
         bool acquired = await YieldDeviceAsync(ct);
         if (!acquired) return [];
         try
         {
-            return await RunStaFresh<List<MtpFolderInfo>>(() =>
+            // IMPORTANT: use RunSta (shared STA thread), NOT RunStaFresh.
+            // GetConnectedDevices() also runs on the shared STA thread.  WPD COM proxies
+            // have STA thread affinity — calling GetDevices() from a different STA thread
+            // returns cross-apartment proxies that fail to open the device silently.
+            return await RunSta<List<MtpFolderInfo>>(() =>
             {
-                // After the scan closes its connection the device may briefly
-                // disappear from WPD while iOS renegotiates with Windows.
-                // Retry with generous back-off (up to ~10 s total).
+                // After scan cancellation, iOS briefly renegotiates the WPD connection.
+                // Retry with back-off (total ~10 s) until the device reappears.
                 int[] retryDelaysMs = [0, 1000, 2000, 3000, 4000];
                 Exception? lastEx = null;
                 foreach (int delay in retryDelaysMs)
@@ -433,28 +434,28 @@ public static class MtpDeviceService
                             continue;
                         }
                         dev.Connect();
-                        using (dev)
+                        IEnumerable<MediaDevices.MediaDirectoryInfo> dirs =
+                            string.IsNullOrEmpty(path)
+                                ? dev.GetRootDirectory().EnumerateDirectories()
+                                : dev.GetDirectoryInfo(path).EnumerateDirectories();
+                        var result = new List<MtpFolderInfo>();
+                        foreach (var sub in dirs)
                         {
-                            IEnumerable<MediaDevices.MediaDirectoryInfo> dirs =
-                                string.IsNullOrEmpty(path)
-                                    ? dev.GetRootDirectory().EnumerateDirectories()
-                                    : dev.GetDirectoryInfo(path).EnumerateDirectories();
-                            var result = new List<MtpFolderInfo>();
-                            foreach (var sub in dirs)
-                            {
-                                if (ct.IsCancellationRequested)
-                                    throw new OperationCanceledException(ct);
-                                result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
-                            }
-                            return result;
+                            if (ct.IsCancellationRequested)
+                                throw new OperationCanceledException(ct);
+                            result.Add(new MtpFolderInfo(sub.FullName, sub.Name, -1, -1));
                         }
+                        // Disconnect but do NOT Dispose — GetDevices() returns cached COM
+                        // proxies; disposing invalidates the RCW for future calls.
+                        dev.Disconnect();
+                        return result;
                     }
                     catch (OperationCanceledException) { throw; }
                     catch (Exception ex) { lastEx = ex; }
                 }
                 throw lastEx ?? new InvalidOperationException(
                     "Device not found. Make sure it is connected, unlocked, and trusted.");
-            }, ct);
+            });
         }
         finally
         {
