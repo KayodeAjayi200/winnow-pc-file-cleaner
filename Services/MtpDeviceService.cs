@@ -222,21 +222,30 @@ public static class MtpDeviceService
     /// the device connection has been released before returning.
     /// The caller MUST release _deviceSemaphore in a finally block after use.
     /// </summary>
-    private static async Task YieldDeviceAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Cancels any active scan then acquires the device semaphore, guaranteeing
+    /// the device connection has been released before returning.
+    /// Returns true if the semaphore was acquired (caller MUST Release in a finally).
+    /// Returns false if cancelled or the scan never yielded — caller must NOT Release.
+    /// </summary>
+    private static async Task<bool> YieldDeviceAsync(CancellationToken ct = default)
     {
         // Ask the scanner to cancel
         if (BeforeExclusiveDeviceAccess != null)
             await BeforeExclusiveDeviceAccess.Invoke();
 
         // Block until the device is actually free (scan has closed its connection).
-        // 20 s timeout handles pathological cases (very slow COM calls on the STA).
-        bool acquired = await _deviceSemaphore.WaitAsync(20_000, ct);
-        if (!acquired)
+        // We wait indefinitely (with CancellationToken) so we never release a semaphore
+        // we don't hold, which would corrupt the count and crash the app.
+        try
         {
-            // Device didn't free up in time — attempt anyway; worst case the
-            // retry loop in the caller will try again.
+            await _deviceSemaphore.WaitAsync(ct);
+            return true;
         }
-        // Semaphore is now held by this caller; it must Release() in a finally.
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -273,7 +282,8 @@ public static class MtpDeviceService
         CancellationToken ct = default)
     {
         // Cancels any active scan and acquires _deviceSemaphore
-        await YieldDeviceAsync(ct);
+        bool acquired = await YieldDeviceAsync(ct);
+        if (!acquired) return null;   // cancelled before we could get the device
         try
         {
             return await RunStaFresh<string?>(() =>
@@ -391,7 +401,8 @@ public static class MtpDeviceService
     public static async Task<List<MtpFolderInfo>> GetSubfoldersQuickAsync(
         string deviceId, string path, CancellationToken ct = default)
     {
-        await YieldDeviceAsync(ct);
+        bool acquired = await YieldDeviceAsync(ct);
+        if (!acquired) return [];
         try
         {
             return await RunStaFresh<List<MtpFolderInfo>>(() =>

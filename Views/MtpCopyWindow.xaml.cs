@@ -109,47 +109,25 @@ public partial class MtpCopyWindow : Window
         _folders.Clear();
         SetLoadingStatus("Connecting to device…", "Pausing any active scan");
 
-        // ── Phase 1: list folder names (with retry in case device is busy) ────
+        // ── Phase 1: list folder names ────────────────────────────────────────
+        // GetSubfoldersQuickAsync now waits (indefinitely) for the device semaphore,
+        // so no retry loop needed. Transient failures still throw and show an error.
         List<MtpFolderInfo>? infos = null;
-        Exception? lastEx = null;
-        const int maxAttempts = 4;
-
-        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        try
         {
-            if (sizeCt.IsCancellationRequested) return;
-
-            if (attempt > 1)
-            {
-                SetLoadingStatus(
-                    $"Retrying… (attempt {attempt}/{maxAttempts})",
-                    "Device may be busy — waiting");
-                await Task.Delay(1500 * attempt, sizeCt).ConfigureAwait(false);
-            }
-            else
-            {
-                SetLoadingStatus("Connecting to device…", "Pausing any active scan");
-            }
-
-            try
-            {
-                infos = await MtpDeviceService.GetSubfoldersQuickAsync(
-                    _deviceId, _sourcePath, sizeCt);
-                lastEx = null;
-                break;   // success
-            }
-            catch (OperationCanceledException) { return; }
-            catch (Exception ex) { lastEx = ex; }
+            infos = await MtpDeviceService.GetSubfoldersQuickAsync(
+                _deviceId, _sourcePath, sizeCt);
         }
-
-        if (infos == null)
+        catch (OperationCanceledException) { return; }
+        catch (Exception ex)
         {
             LoadingPanel.Visibility = Visibility.Collapsed;
-            EmptyText.Text          = lastEx != null
-                ? $"Could not connect to device:\n{lastEx.Message}"
-                : "Could not list folders. Try closing and reopening this dialog.";
+            EmptyText.Text          = $"Could not connect to device:\n{ex.Message}";
             EmptyText.Visibility    = Visibility.Visible;
             return;
         }
+
+        if (infos == null || sizeCt.IsCancellationRequested) return;
 
         SetLoadingStatus("Loading folders…");
         _folders.Clear();
