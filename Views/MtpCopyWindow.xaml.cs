@@ -290,13 +290,29 @@ public partial class MtpCopyWindow : Window
         _cts               = new CancellationTokenSource();
         CopyBtn.IsEnabled  = false;
         CancelBtn.Content  = "Stop";
-        ProgressPanel.Visibility = Visibility.Visible;
-        CopyProgressBar.Value    = 0;
-        ProgressLabel.Text       = "Starting…";
-        ProgressPctText.Text     = "0%";
+        ProgressPanel.Visibility        = Visibility.Visible;
+        CopyProgressBar.IsIndeterminate = true;
+        CopyProgressBar.Value           = 0;
+        ProgressLabel.Text              = "Connecting to device…";
+        ProgressPctText.Text            = "…";
 
         var progress = new Progress<CopyProgress>(p =>
         {
+            // TotalFiles == -1 is the "enumeration" sentinel — no copying has started yet
+            if (p.TotalFiles < 0)
+            {
+                CopyProgressBar.IsIndeterminate = true;
+                ProgressPctText.Text = "…";
+                ProgressLabel.Text   = p.FilesCopied > 0
+                    ? $"Found {p.FilesCopied:N0} files so far…"
+                    : "Scanning device folders…";
+                CurrentFileText.Text = p.CurrentFile;
+                SpeedText.Text       = string.Empty;
+                EtaText.Text         = string.Empty;
+                return;
+            }
+
+            CopyProgressBar.IsIndeterminate = false;
             double pct = p.TotalFiles == 0 ? 0 : 100.0 * p.FilesCopied / p.TotalFiles;
             CopyProgressBar.Value  = pct;
             ProgressPctText.Text   = $"{pct:F0}%";
@@ -357,20 +373,23 @@ public partial class MtpCopyWindow : Window
             await MtpDeviceService.CopyFoldersAsync(
                 _deviceId, selectedPaths, _destPath, skipExisting, progress, _cts.Token);
 
+            CopyProgressBar.IsIndeterminate = false;
+            CopyProgressBar.Value = 100;
             ProgressLabel.Text    = "✅ Copy complete!";
             ProgressPctText.Text  = "Done";
             CurrentFileText.Text  = string.Empty;
-            CopyProgressBar.Value = 100;
             SummaryText.Text      = "Copy finished successfully";
         }
         catch (OperationCanceledException)
         {
+            CopyProgressBar.IsIndeterminate = false;
             ProgressLabel.Text   = "⏹ Stopped by user";
             ProgressPctText.Text = string.Empty;
             SummaryText.Text     = "Copy cancelled";
         }
         catch (Exception ex)
         {
+            CopyProgressBar.IsIndeterminate = false;
             System.Windows.MessageBox.Show(
                 $"Copy failed:\n{ex.Message}",
                 "Error", MessageBoxButton.OK, MessageBoxImage.Error);

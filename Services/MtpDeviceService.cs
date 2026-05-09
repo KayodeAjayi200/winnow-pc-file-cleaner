@@ -448,6 +448,10 @@ public static class MtpDeviceService
         CancellationToken       ct = default)
     {
         // ── Phase 1: Enumerate all files ──────────────────────────────────────
+        // Report a sentinel progress so the UI shows a live "counting" message.
+        // TotalFiles = -1 signals "enumeration mode" to the UI.
+        progress?.Report(new CopyProgress(0, -1, 0, 0, "Scanning folders on device…"));
+
         await _deviceSemaphore.WaitAsync(ct);
         List<(string mtpFile, long size)> files;
         try
@@ -456,9 +460,11 @@ public static class MtpDeviceService
             {
                 using var device = OpenDevice(deviceId);
                 var list = new List<(string mtpFile, long size)>();
+                int reportEvery = 25;
                 foreach (var folder in mtpFolderPaths)
                 {
                     ct.ThrowIfCancellationRequested();
+                    string folderName = System.IO.Path.GetFileName(folder.TrimEnd('\\'));
                     try
                     {
                         foreach (var f in device.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
@@ -470,6 +476,10 @@ public static class MtpDeviceService
                                 list.Add((f, (long)info.Length));
                             }
                             catch { list.Add((f, 0)); }
+
+                            if (list.Count % reportEvery == 0)
+                                progress?.Report(new CopyProgress(list.Count, -1, 0, 0,
+                                    $"Counting files in {folderName}… {list.Count:N0} found"));
                         }
                     }
                     catch (OperationCanceledException) { throw; }
