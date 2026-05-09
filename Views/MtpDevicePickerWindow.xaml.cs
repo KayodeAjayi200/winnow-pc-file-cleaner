@@ -286,22 +286,24 @@ public partial class MtpDevicePickerWindow : Window
 
         if (confirm != MessageBoxResult.Yes) return;
 
-        // Show loading while deleting
-        FolderScrollViewer.IsEnabled  = false;
-        FolderLoadingPanel.Visibility = Visibility.Visible;
-        FolderLoadingText.Text        = $"Deleting \"{entry.Name}\"…";
+        // Show full overlay while deleting
+        DeleteProgressText.Text         = $"Deleting \"{entry.Name}\"…";
+        DeleteProgressOverlay.Visibility = Visibility.Visible;
+
+        var progress = new Progress<string>(msg =>
+            Dispatcher.BeginInvoke(() => DeleteProgressText.Text = msg));
 
         try
         {
-            await MtpDeviceService.DeleteFoldersAsync(_currentDeviceId, [entry.Path]);
+            await MtpDeviceService.DeleteFoldersAsync(_currentDeviceId, [entry.Path], progress);
             _checkedPaths.Remove(entry.Path);
+            DeleteProgressOverlay.Visibility = Visibility.Collapsed;
             // Refresh the current folder listing
             await NavigateFolderAsync(_currentPath);
         }
         catch (Exception ex)
         {
-            FolderLoadingPanel.Visibility = Visibility.Collapsed;
-            FolderScrollViewer.IsEnabled  = true;
+            DeleteProgressOverlay.Visibility = Visibility.Collapsed;
             System.Windows.MessageBox.Show($"Could not delete folder: {ex.Message}", "Delete Failed",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }

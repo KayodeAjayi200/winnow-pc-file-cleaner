@@ -220,6 +220,25 @@
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                Visibility="Collapsed"/>
 
+                    <!-- Delete progress overlay (shown while deleting) -->
+                    <Grid x:Name="DeleteProgressOverlay" Visibility="Collapsed" Panel.ZIndex="10">
+                        <Rectangle Fill="#CC0E0E1A"/>
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16">
+                            <TextBlock Text="⏳" FontSize="28" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                            <TextBlock x:Name="DeleteProgressText"
+                                       Text="Deleting…"
+                                       FontSize="13" Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       TextWrapping="Wrap" TextAlignment="Center"
+                                       MaxWidth="260"/>
+                            <TextBlock Text="This may take a while for large folders."
+                                       FontSize="11" Foreground="#888"
+                                       HorizontalAlignment="Center"
+                                       TextWrapping="Wrap" TextAlignment="Center"
+                                       Margin="0,6,0,0" MaxWidth="260"/>
+                        </StackPanel>
+                    </Grid>
+
                     <!-- Scrollable folder list -->
                     <ScrollViewer x:Name="FolderScrollViewer"
                                   VerticalScrollBarVisibility="Auto"
