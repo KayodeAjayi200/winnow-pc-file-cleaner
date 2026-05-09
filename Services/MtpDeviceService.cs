@@ -546,7 +546,7 @@ public static class MtpDeviceService
     /// One device connection is kept for the entire batch to avoid per-file
     /// Connect/Disconnect overhead.
     /// </summary>
-    public static async Task CopyFoldersAsync(
+    public static async Task<List<string>> CopyFoldersAsync(
         string                  deviceId,
         IList<string>           mtpFolderPaths,
         string                  localDestRoot,
@@ -606,6 +606,7 @@ public static class MtpDeviceService
         int  countDone  = 0;
         int  errorCount = 0;
         var  startTime  = DateTime.UtcNow;
+        var  failedMtpPaths = new System.Collections.Concurrent.ConcurrentBag<string>();
 
         // ── Phase 2: Pipeline copy ────────────────────────────────────────────
         var channel = System.Threading.Channels.Channel.CreateBounded<
@@ -650,6 +651,7 @@ public static class MtpDeviceService
                         catch
                         {
                             System.Threading.Interlocked.Increment(ref errorCount);
+                            failedMtpPaths.Add(mtpFile);
                             channel.Writer.WriteAsync((null, null, fileSize, fileName))
                                           .AsTask().GetAwaiter().GetResult();
                         }
@@ -694,6 +696,7 @@ public static class MtpDeviceService
         }
 
         await producer; // propagate any unhandled producer exception
+        return failedMtpPaths.ToList();
     }
 
     private static readonly HashSet<string> _imageExts =

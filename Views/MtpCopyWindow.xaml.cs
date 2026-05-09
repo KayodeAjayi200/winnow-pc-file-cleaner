@@ -68,6 +68,8 @@ public partial class MtpCopyWindow : Window
     private CancellationTokenSource? _cts;
     private bool _copying;
     private List<string>? _lastCopiedPaths;
+    // Paths that are safe to delete (fully copied — no failed files inside them)
+    private List<string>? _safeToDeletePaths;
 
     private readonly ObservableCollection<FolderItem> _folders = new();
 
@@ -386,8 +388,8 @@ public partial class MtpCopyWindow : Window
             // Error count
             if (p.Errors > 0)
             {
-                ErrorCountText.Text       = $"⚠ {p.Errors} file{(p.Errors == 1 ? "" : "s")} skipped due to errors";
-                ErrorCountText.Visibility = Visibility.Visible;
+                ErrorCountText.Text   = $"⚠ {p.Errors} file{(p.Errors == 1 ? "" : "s")} skipped due to errors  ▼ Show details";
+                ErrorCountBtn.Visibility = Visibility.Visible;
             }
 
             // Live thumbnail for image files
@@ -412,19 +414,56 @@ public partial class MtpCopyWindow : Window
         try
         {
             bool skipExisting = SkipExistingCheck.IsChecked == true;
-            await MtpDeviceService.CopyFoldersAsync(
+            var failedFiles = await MtpDeviceService.CopyFoldersAsync(
                 _deviceId, selectedPaths, _destPath, skipExisting, progress, _cts.Token);
 
             CopyProgressBar.IsIndeterminate = false;
             CopyProgressBar.Value = 100;
-            ProgressLabel.Text    = "✅ Copy complete!";
             ProgressPctText.Text  = "Done";
             CurrentFileText.Text  = string.Empty;
-            SummaryText.Text      = "Copy finished successfully";
 
-            // Show delete-from-device button
-            _lastCopiedPaths = selectedPaths;
-            DeleteFromDeviceBtn.Visibility = Visibility.Visible;
+            if (failedFiles.Count > 0)
+            {
+                // Populate failed-files panel
+                FailedFilesList.ItemsSource = failedFiles
+                    .Select(f => System.IO.Path.GetFileName(f))
+                    .OrderBy(n => n)
+                    .ToList();
+                ErrorCountText.Text      = $"⚠ {failedFiles.Count} file{(failedFiles.Count == 1 ? "" : "s")} failed to copy  ▼ Show details";
+                ErrorCountBtn.Visibility = Visibility.Visible;
+                ProgressLabel.Text       = "✅ Copy complete (with errors)";
+                SummaryText.Text         = $"Copy finished — {failedFiles.Count} file{(failedFiles.Count == 1 ? "" : "s")} skipped";
+
+                // Only offer to delete folders that had zero failures
+                _lastCopiedPaths   = selectedPaths;
+                _safeToDeletePaths = selectedPaths
+                    .Where(folder => !failedFiles.Any(f =>
+                        f.StartsWith(folder, StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+
+                if (_safeToDeletePaths.Count > 0)
+                {
+                    int skippedFolders = selectedPaths.Count - _safeToDeletePaths.Count;
+                    string btnLabel = _safeToDeletePaths.Count == 1
+                        ? "🗑 Delete 1 folder from Device"
+                        : $"🗑 Delete {_safeToDeletePaths.Count} folders from Device";
+                    if (skippedFolders > 0)
+                        btnLabel += $"\n({skippedFolders} skipped — had errors)";
+                    DeleteFromDeviceBtn.Content    = btnLabel;
+                    DeleteFromDeviceBtn.Visibility = Visibility.Visible;
+                    FailedFilesNote.Text           = $"Folders with copy errors will NOT be deleted from the device. "
+                                                   + $"{skippedFolders} folder{(skippedFolders == 1 ? "" : "s")} will be kept on device.";
+                }
+            }
+            else
+            {
+                ProgressLabel.Text = "✅ Copy complete!";
+                SummaryText.Text   = "Copy finished successfully";
+                _lastCopiedPaths   = selectedPaths;
+                _safeToDeletePaths = selectedPaths;
+                DeleteFromDeviceBtn.Content    = "🗑 Delete from Device";
+                DeleteFromDeviceBtn.Visibility = Visibility.Visible;
+            }
         }
         catch (OperationCanceledException)
         {
@@ -449,14 +488,28 @@ public partial class MtpCopyWindow : Window
         }
     }
 
+    private void ErrorCountBtn_Click(object sender, RoutedEventArgs e)
+    {
+        bool isVisible = FailedFilesPanel.Visibility == Visibility.Visible;
+        FailedFilesPanel.Visibility = isVisible ? Visibility.Collapsed : Visibility.Visible;
+        string countPart = ErrorCountText.Text.Split("  ▼")[0].Split("  ▲")[0];
+        ErrorCountText.Text = countPart + (isVisible ? "  ▼ Show details" : "  ▲ Hide details");
+    }
+
     private async void DeleteFromDevice_Click(object sender, RoutedEventArgs e)
     {
-        if (_lastCopiedPaths is not { Count: > 0 }) return;
+        var targets = _safeToDeletePaths ?? _lastCopiedPaths;
+        if (targets is not { Count: > 0 }) return;
 
-        int count  = _lastCopiedPaths.Count;
+        int skipped = (_lastCopiedPaths?.Count ?? 0) - targets.Count;
+        int count   = targets.Count;
+
         string msg = count == 1
-            ? $"Permanently delete '{System.IO.Path.GetFileName(_lastCopiedPaths[0].TrimEnd('\\'))}' from the device?\n\nThis cannot be undone."
-            : $"Permanently delete {count} folders from the device?\n\nThis cannot be undone.";
+            ? $"Permanently delete '{System.IO.Path.GetFileName(targets[0].TrimEnd('\\'))}' from the device?\n\nThis cannot be undone."
+            : $"Permanently delete {count} folder{(count == 1 ? "" : "s")} from the device?\n\nThis cannot be undone.";
+
+        if (skipped > 0)
+            msg += $"\n\n⚠ {skipped} folder{(skipped == 1 ? "" : "s")} with copy errors will NOT be deleted.";
 
         var result = System.Windows.MessageBox.Show(
             msg, "Delete from Device",
@@ -476,7 +529,7 @@ public partial class MtpCopyWindow : Window
         try
         {
             await MtpDeviceService.DeleteFoldersAsync(
-                _deviceId, _lastCopiedPaths, delProgress, cts.Token);
+                _deviceId, targets, delProgress, cts.Token);
 
             CopyProgressBar.IsIndeterminate = false;
             CopyProgressBar.Value           = 100;
@@ -486,6 +539,7 @@ public partial class MtpCopyWindow : Window
             // Hide the delete button — nothing left to delete
             DeleteFromDeviceBtn.Visibility  = Visibility.Collapsed;
             _lastCopiedPaths                = null;
+            _safeToDeletePaths              = null;
         }
         catch (Exception ex)
         {

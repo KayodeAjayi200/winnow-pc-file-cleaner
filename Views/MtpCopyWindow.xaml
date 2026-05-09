@@ -315,10 +315,46 @@
                        FontSize="11" Foreground="#666"
                        TextTrimming="CharacterEllipsis"
                        Margin="0,4,0,0"/>
-            <TextBlock x:Name="ErrorCountText"
-                       FontSize="11" Foreground="#f97316"
-                       Margin="0,2,0,0"
-                       Visibility="Collapsed"/>
+            <!-- Error count — click to expand/collapse the failed-files list -->
+            <Button x:Name="ErrorCountBtn"
+                    Visibility="Collapsed"
+                    Background="Transparent" BorderThickness="0"
+                    Cursor="Hand" HorizontalAlignment="Left"
+                    Padding="0,4,0,0"
+                    Click="ErrorCountBtn_Click">
+                <TextBlock x:Name="ErrorCountText"
+                           FontSize="11" Foreground="#f97316"/>
+            </Button>
+            <!-- Expandable failed-files panel -->
+            <Border x:Name="FailedFilesPanel"
+                    Visibility="Collapsed"
+                    Background="#1f1108" BorderBrush="#92400e"
+                    BorderThickness="1" CornerRadius="6"
+                    Padding="10,8" Margin="0,6,0,0">
+                <StackPanel>
+                    <TextBlock Text="FILES THAT FAILED TO COPY"
+                               FontSize="10" Foreground="#f97316"
+                               FontWeight="Bold" Margin="0,0,0,6"/>
+                    <ScrollViewer MaxHeight="120"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="FailedFilesList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}"
+                                               FontSize="11" Foreground="#fbbf24"
+                                               TextTrimming="CharacterEllipsis"
+                                               Margin="0,1"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <TextBlock x:Name="FailedFilesNote"
+                               FontSize="10" Foreground="#888"
+                               Margin="0,6,0,0"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
         </StackPanel>
 
         <!-- Buttons -->
