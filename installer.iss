@@ -62,3 +62,5 @@ Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; Used by /RESTARTAPPLICATIONS during silent updates
+Filename: "{app}\{#AppExeName}"; Flags: nowait runhidden; Check: WizardSilent

@@ -109,7 +109,7 @@ public static class UpdateService
 
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(tempFile)
         {
-            Arguments       = "/SILENT /CLOSEAPPLICATIONS",
+            Arguments       = "/VERYSILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS",
             UseShellExecute = true
         });
 
