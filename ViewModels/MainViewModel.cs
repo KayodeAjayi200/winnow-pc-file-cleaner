@@ -42,6 +42,8 @@ public class MainViewModel : INotifyPropertyChanged
 
     // ── Bindable properties ────────────────────────────────────────────────────
 
+    public string AppDisplayVersion => $"v{UpdateService.CurrentDisplayVersion}";
+
     private string _folderPath = string.Empty;
     public string FolderPath
     {
@@ -888,13 +890,15 @@ public class MainViewModel : INotifyPropertyChanged
     public void Undo()
     {
         if (!CanUndo) return;
-        var entry = _undoStack.Pop();
-        OnPropertyChanged(nameof(CanUndo));
-        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+        var entry = _undoStack.Peek();
 
-        bool restored = RecycleBinService.RestoreFromRecycleBin(entry.File.FullPath);
+        bool restored = RecycleBinService.RestoreFromRecycleBin(entry.File.FullPath, entry.File.Size);
         if (restored)
         {
+            _undoStack.Pop();
+            OnPropertyChanged(nameof(CanUndo));
+            System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+
             FilesDeleted  = Math.Max(0, FilesDeleted - 1);
             SpaceFreed    = Math.Max(0, SpaceFreed - entry.File.Size);
             _filteredTotalSize += entry.File.Size;
@@ -920,14 +924,14 @@ public class MainViewModel : INotifyPropertyChanged
     private void RestoreDeletedEntry(DeletedEntry? entry)
     {
         if (entry == null) return;
-        bool restored = RecycleBinService.RestoreFromRecycleBin(entry.File.FullPath);
+        bool restored = RecycleBinService.RestoreFromRecycleBin(entry.File.FullPath, entry.File.Size);
         if (restored)
         {
             DeletedEntries.Remove(entry);
             // Remove from undo stack too
             var list = _undoStack.Where(e => e != entry).ToList();
             _undoStack.Clear();
-            foreach (var e in list) _undoStack.Push(e);
+            foreach (var e in list.AsEnumerable().Reverse()) _undoStack.Push(e);
             OnPropertyChanged(nameof(CanUndo));
             System.Windows.Input.CommandManager.InvalidateRequerySuggested();
             RefreshRecycleBinSize();

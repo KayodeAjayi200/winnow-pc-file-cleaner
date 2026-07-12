@@ -21,7 +21,7 @@
                       MediaOpened="VideoPreview_MediaOpened"
                       MediaFailed="VideoPreview_MediaFailed"/>
 
-        <!-- Video play/pause overlay -->
+        <!-- Video open overlay -->
         <Border x:Name="VideoPlayOverlay"
                 Width="48" Height="48"
                 CornerRadius="24"
@@ -30,6 +30,7 @@
                 VerticalAlignment="Bottom"
                 Margin="0,0,8,8"
                 Cursor="Hand"
+                ToolTip="Open video"
                 Visibility="Collapsed"
                 MouseLeftButtonUp="VideoPlayOverlay_Click">
             <TextBlock x:Name="PlayPauseIcon"

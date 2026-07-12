@@ -30,7 +30,6 @@ public partial class FilePreviewControl : UserControl
     // ── State ──────────────────────────────────────────────────────────────────
 
     private string? _loadingPath;
-    private bool    _videoPlaying;
 
     // Tracks the last temp file opened via an external app so we can clean it up
     private static string? _lastOpenedExternalTemp;
@@ -351,7 +350,6 @@ public partial class FilePreviewControl : UserControl
             VideoPreview.Source     = new Uri(path);
             VideoPreview.Visibility = Visibility.Visible;
             VideoPreview.Play(); // triggers MediaOpened, which will pause at frame 0
-            _videoPlaying = true;
         }
         catch
         {
@@ -364,7 +362,6 @@ public partial class FilePreviewControl : UserControl
         // Pause immediately to show the first frame as a thumbnail
         VideoPreview.Pause();
         VideoPreview.Position     = TimeSpan.Zero;
-        _videoPlaying             = false;
         PlayPauseIcon.Text        = "▶";
         VideoPlayOverlay.Visibility = Visibility.Visible;
     }
@@ -377,18 +374,9 @@ public partial class FilePreviewControl : UserControl
 
     private void VideoPlayOverlay_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (_videoPlaying)
-        {
-            VideoPreview.Pause();
-            _videoPlaying       = false;
-            PlayPauseIcon.Text  = "▶";
-        }
-        else
-        {
-            VideoPreview.Play();
-            _videoPlaying       = true;
-            PlayPauseIcon.Text  = "⏸";
-        }
+        e.Handled = true;
+        if (FileItem is { } file)
+            OpenInDefaultApp(file);
     }
 
     private void StopVideo()
@@ -402,7 +390,6 @@ public partial class FilePreviewControl : UserControl
             }
         }
         catch { }
-        _videoPlaying = false;
     }
 
     // ── Text preview ───────────────────────────────────────────────────────────

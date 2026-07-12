@@ -22,6 +22,14 @@ public static class UpdateService
     public static string CurrentVersion =>
         Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
 
+    /// <summary>The release label shown in the UI, formatted as yyyyMMdd.increment.</summary>
+    public static string CurrentDisplayVersion =>
+        Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion
+            .Split('+')[0]
+        ?? CurrentVersion;
+
     /// <summary>
     /// Hits the GitHub releases API and returns info if a newer version is available.
     /// Returns null on any error so callers never need to handle exceptions.

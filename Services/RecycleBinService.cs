@@ -38,6 +38,7 @@ public static class RecycleBinService
     private const short FOF_ALLOWUNDO        = 0x0040;
     private const short FOF_NOCONFIRMATION   = 0x0010;
     private const short FOF_SILENT           = 0x0004;
+    private const short FOF_NOERRORUI        = 0x0400;
 
     private const uint SHERB_NOCONFIRMATION  = 0x00000001;
     private const uint SHERB_NOPROGRESSUI    = 0x00000002;
@@ -51,9 +52,9 @@ public static class RecycleBinService
             hwnd   = IntPtr.Zero,
             wFunc  = FO_DELETE,
             pFrom  = filePath + "\0\0",
-            fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT
+            fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI
         };
-        return SHFileOperation(ref op) == 0;
+        return SHFileOperation(ref op) == 0 && !op.fAnyOperationsAborted;
     }
 
     /// <summary>
@@ -62,7 +63,7 @@ public static class RecycleBinService
     /// Falls back to Shell COM automation if direct parsing fails.
     /// Returns true if the file was restored.
     /// </summary>
-    public static bool RestoreFromRecycleBin(string originalPath)
+    public static bool RestoreFromRecycleBin(string originalPath, long? originalSize = null)
     {
         return TryRestoreViaRecycleBinFiles(originalPath)
             || TryRestoreViaCom(originalPath);

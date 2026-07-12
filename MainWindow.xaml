@@ -38,16 +38,46 @@
                     <TextBlock Text="🔥" FontSize="22" Margin="0,0,10,0"
                                FontFamily="Segoe UI Emoji"
                                Foreground="#FF6B35"/>
-                    <TextBlock Text="Winnow" FontSize="20" FontWeight="Bold"
-                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,10,0"/>
-                    <Border Background="#1A7C3AED" CornerRadius="12" Padding="8,3" VerticalAlignment="Center">
-                        <TextBlock Text="File cleaner" FontSize="11"
-                                   Foreground="{StaticResource AccentBrandBrush}"/>
-                    </Border>
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Winnow" FontSize="20" FontWeight="Bold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,10,0"/>
+                            <Border Background="#1A7C3AED" CornerRadius="12" Padding="8,3" VerticalAlignment="Center">
+                                <TextBlock Text="File cleaner" FontSize="11"
+                                           Foreground="{StaticResource AccentBrandBrush}"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="{Binding AppDisplayVersion, Mode=OneWay}"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Margin="1,-1,0,0"/>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Sound + shortcuts controls -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <!-- Speedup toggle button -->
+                    <Button x:Name="SpeedupToggleButton"
+                            Cursor="Hand" Padding="10,5" Margin="0,0,10,0"
+                            ToolTip="Easy Speedup — optimize startup time"
+                            AutomationProperties.Name="Easy Speedup"
+                            Click="SpeedupToggleButton_Click">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Tag, ElementName=SpeedupToggleButton}" Value="Active">
+                                        <Setter Property="Background" Value="#1A2563EB"/>
+                                        <Setter Property="BorderBrush" Value="#2563EB"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚡" FontSize="14" Margin="0,0,6,0" FontFamily="Segoe UI Emoji"/>
+                            <TextBlock x:Name="SpeedupButtonLabel" Text="Speedup" FontSize="13"/>
+                        </StackPanel>
+                    </Button>
+
                     <!-- Cleanup toggle button -->
                     <Button x:Name="CleanupToggleButton"
                             Cursor="Hand" Padding="10,5" Margin="0,0,10,0"
@@ -57,7 +87,7 @@
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsChecked, ElementName=CleanupToggleButton}" Value="True">
+                                    <DataTrigger Binding="{Binding Tag, ElementName=CleanupToggleButton}" Value="Active">
                                         <Setter Property="Background" Value="#1A7C3AED"/>
                                         <Setter Property="BorderBrush" Value="#7C3AED"/>
                                     </DataTrigger>
@@ -529,6 +559,11 @@
 
         <!-- ════════════════  CLEANUP PANEL  ═══════════════════════ -->
         <views:CleanupView x:Name="CleanupPanel"
+                           Grid.Row="6"
+                           Visibility="Collapsed"/>
+
+        <!-- ════════════════  SPEEDUP PANEL  ════════════════════════ -->
+        <views:SpeedupView x:Name="SpeedupPanel"
                            Grid.Row="6"
                            Visibility="Collapsed"/>
 

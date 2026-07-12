@@ -14,11 +14,119 @@ public partial class CleanupView : UserControl
     private IReadOnlyList<CleanupScanResult>? _scanResults;
     private CancellationTokenSource? _cts;
 
+    private bool _scheduleInitializing = true;
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public CleanupView()
     {
         InitializeComponent();
+        InitScheduleUI();
+    }
+
+    // ── Schedule UI init ──────────────────────────────────────────────────────
+
+    private void InitScheduleUI()
+    {
+        // Hours 0-23
+        HourCombo.ItemsSource = Enumerable.Range(0, 24).Select(h => h.ToString("D2")).ToList();
+        // Minutes: 00, 15, 30, 45
+        MinuteCombo.ItemsSource = new[] { "00", "15", "30", "45" };
+        // Days of week
+        WeekDayCombo.ItemsSource = Enum.GetValues<DayOfWeek>().Cast<DayOfWeek>().ToList();
+        WeekDayCombo.DisplayMemberPath = null;
+
+        var sched = ScheduledCleanupService.Load();
+
+        ScheduleEnabledCheck.IsChecked = sched.IsEnabled;
+        FreqDaily.IsChecked  = sched.Frequency != ScheduleFrequency.Weekly;
+        FreqWeekly.IsChecked = sched.Frequency == ScheduleFrequency.Weekly;
+        HourCombo.SelectedIndex   = sched.Hour;
+        MinuteCombo.SelectedIndex = sched.Minute switch { 15 => 1, 30 => 2, 45 => 3, _ => 0 };
+        WeekDayCombo.SelectedItem = sched.WeekDay;
+
+        ScheduleOptionsPanel.Visibility = sched.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
+        WeekDayPanel.Visibility = sched.Frequency == ScheduleFrequency.Weekly
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        if (sched.IsEnabled)
+            ShowActiveSchedule(sched);
+
+        _scheduleInitializing = false;
+    }
+
+    private void ShowActiveSchedule(CleanupSchedule sched)
+    {
+        var time = $"{sched.Hour:D2}:{sched.Minute:D2}";
+        var when = sched.Frequency == ScheduleFrequency.Daily
+            ? $"daily at {time}"
+            : $"weekly on {sched.WeekDay} at {time}";
+        ActiveScheduleText.Text    = $"Scheduled to run {when}";
+        ActiveScheduleBanner.Visibility = Visibility.Visible;
+        ScheduleStatusLabel.Text   = "Enabled";
+        ScheduleStatusLabel.Foreground = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81));
+    }
+
+    // ── Schedule changed handlers ─────────────────────────────────────────────
+
+    private void Schedule_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_scheduleInitializing) return;
+
+        bool enabled = ScheduleEnabledCheck.IsChecked == true;
+        ScheduleOptionsPanel.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!enabled)
+        {
+            ActiveScheduleBanner.Visibility = Visibility.Collapsed;
+            ScheduleStatusLabel.Text        = "Disabled";
+            ScheduleStatusLabel.Foreground  = FindResource("TextMutedBrush") as System.Windows.Media.Brush;
+        }
+
+        WeekDayPanel.Visibility = (FreqWeekly.IsChecked == true)
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void Schedule_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_scheduleInitializing) return;
+        WeekDayPanel.Visibility = (FreqWeekly.IsChecked == true)
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SaveSchedule_Click(object sender, RoutedEventArgs e)
+    {
+        var schedule = BuildSchedule();
+        var (ok, message) = ScheduledCleanupService.Apply(schedule);
+
+        ScheduleSaveStatus.Visibility = Visibility.Visible;
+        ScheduleSaveStatus.Text       = message;
+        ScheduleSaveStatus.Foreground = new System.Windows.Media.SolidColorBrush(ok
+            ? System.Windows.Media.Color.FromRgb(0x6E, 0xE7, 0xB7)
+            : System.Windows.Media.Color.FromRgb(0xF8, 0x71, 0x71));
+
+        if (ok && schedule.IsEnabled)
+            ShowActiveSchedule(schedule);
+        else if (!schedule.IsEnabled)
+            ActiveScheduleBanner.Visibility = Visibility.Collapsed;
+    }
+
+    private CleanupSchedule BuildSchedule()
+    {
+        int hour   = HourCombo.SelectedIndex;
+        int minute = MinuteCombo.SelectedIndex switch { 1 => 15, 2 => 30, 3 => 45, _ => 0 };
+        var day    = WeekDayCombo.SelectedItem is DayOfWeek dow ? dow : DayOfWeek.Sunday;
+
+        return new CleanupSchedule
+        {
+            IsEnabled = ScheduleEnabledCheck.IsChecked == true,
+            Frequency = FreqWeekly.IsChecked == true
+                ? ScheduleFrequency.Weekly : ScheduleFrequency.Daily,
+            Hour    = hour,
+            Minute  = minute,
+            WeekDay = day
+        };
     }
 
     // ── Button handler ────────────────────────────────────────────────────────

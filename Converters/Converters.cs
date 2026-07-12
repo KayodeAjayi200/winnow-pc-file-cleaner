@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FileTinder.Services;
 
 namespace FileTinder.Converters;
 
@@ -64,6 +65,16 @@ public class StringToColorConverter : IValueConverter
         }
         return System.Windows.Media.Colors.Gray;
     }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>bool IsEnabled → "Disable" (true) or "Enable" (false).</summary>
+public class EnabledStatusConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is bool b && b ? "Disable" : "Enable";
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();

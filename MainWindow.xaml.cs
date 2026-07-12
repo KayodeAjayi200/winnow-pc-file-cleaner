@@ -49,21 +49,32 @@ public partial class MainWindow : Window
         };
     }
 
-    // ── Cleanup panel toggle ──────────────────────────────────────────────────
+    // ── Panel toggle ──────────────────────────────────────────────────────────
 
-    private bool _cleanupVisible = false;
+    private enum ActivePanel { Main, Cleanup, Speedup }
+    private ActivePanel _activePanel = ActivePanel.Main;
+
+    private void ShowPanel(ActivePanel panel)
+    {
+        _activePanel = panel;
+
+        MainAreaGrid.Visibility  = panel == ActivePanel.Main    ? Visibility.Visible : Visibility.Collapsed;
+        CleanupPanel.Visibility  = panel == ActivePanel.Cleanup ? Visibility.Visible : Visibility.Collapsed;
+        SpeedupPanel.Visibility  = panel == ActivePanel.Speedup ? Visibility.Visible : Visibility.Collapsed;
+
+        CleanupButtonLabel.Text  = panel == ActivePanel.Cleanup ? "← Back" : "Cleanup";
+        SpeedupButtonLabel.Text  = panel == ActivePanel.Speedup ? "← Back" : "Speedup";
+
+        // Highlight active button via Tag trick
+        CleanupToggleButton.Tag  = panel == ActivePanel.Cleanup ? "Active" : null;
+        SpeedupToggleButton.Tag  = panel == ActivePanel.Speedup ? "Active" : null;
+    }
 
     private void CleanupToggleButton_Click(object sender, RoutedEventArgs e)
-    {
-        _cleanupVisible = !_cleanupVisible;
+        => ShowPanel(_activePanel == ActivePanel.Cleanup ? ActivePanel.Main : ActivePanel.Cleanup);
 
-        CleanupPanel.Visibility  = _cleanupVisible ? Visibility.Visible  : Visibility.Collapsed;
-        MainAreaGrid.Visibility  = _cleanupVisible ? Visibility.Collapsed : Visibility.Visible;
-        CleanupButtonLabel.Text  = _cleanupVisible ? "← Back" : "Cleanup";
-
-        // Hide filter/folder bars when in cleanup mode to keep UI clean
-        // (rows 2-5 remain visible so user context is preserved)
-    }
+    private void SpeedupToggleButton_Click(object sender, RoutedEventArgs e)
+        => ShowPanel(_activePanel == ActivePanel.Speedup ? ActivePanel.Main : ActivePanel.Speedup);
 
     private void TypeFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
