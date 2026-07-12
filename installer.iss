@@ -1,4 +1,4 @@
-; ── Winnow PC File Cleaner — Inno Setup Script ────────────────────────────────
+; ── Winnow — Inno Setup Script ────────────────────────────────
 ;
 ; To build locally:
 ;   1. dotnet publish FileTinder.csproj /p:PublishProfile=win-x64-singlefile /p:Version=1.0.0
@@ -14,7 +14,7 @@
   #define AppVersion "1.0.0"
 #endif
 
-#define AppName      "Winnow PC File Cleaner"
+#define AppName      "Winnow"
 #define AppPublisher "Kayode Ajayi"
 #define AppExeName   "Winnow.exe"
 #define SourceDir    "publish\win-x64"
@@ -28,11 +28,11 @@ AppPublisher={#AppPublisher}
 AppPublisherURL={#RepoURL}
 AppSupportURL={#RepoURL}/issues
 AppUpdatesURL={#RepoURL}/releases
-DefaultDirName={autopf}\Winnow PC File Cleaner
-DefaultGroupName=Winnow PC File Cleaner
+DefaultDirName={autopf}\Winnow
+DefaultGroupName=Winnow
 AllowNoIcons=yes
 OutputDir=installer
-OutputBaseFilename=WinnowPCFileCleanerSetup-{#AppVersion}
+OutputBaseFilename=WinnowSetup-{#AppVersion}
 SetupIconFile=app.ico
 Compression=lzma2/ultra64
 SolidCompression=yes

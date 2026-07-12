@@ -15,7 +15,7 @@ public static class UpdateService
     private static readonly HttpClient _http = new()
     {
         Timeout = TimeSpan.FromSeconds(15),
-        DefaultRequestHeaders = { { "User-Agent", "WinnowPCFileCleaner" } }
+        DefaultRequestHeaders = { { "User-Agent", "Winnow" } }
     };
 
     /// <summary>The version embedded in the running assembly (e.g. "1.0.3").</summary>

@@ -65,21 +65,32 @@ jobs:
             /DAppVersion=${{ steps.ver.outputs.version }} `
             installer.iss
 
-      # ── 7. Create GitHub Release & upload installer ───────────────────────────
+      # ── 7. Generate changelog from commits since last tag ────────────────────
+      - name: Generate changelog
+        id: changelog
+        shell: pwsh
+        run: |
+          # Get previous tag (the one before the tag being released)
+          $prevTag = git describe --tags --abbrev=0 HEAD^ 2>$null
+          if ($LASTEXITCODE -ne 0 -or -not $prevTag) {
+            $log = git log --pretty=format:"- %s" | Select-Object -First 30
+          } else {
+            $log = git log "$prevTag..HEAD" --pretty=format:"- %s"
+          }
+          $notes = $log -join "`n"
+          # Write to a file to avoid quoting issues
+          $notes | Out-File -FilePath changelog.md -Encoding utf8
+          echo "prev_tag=$prevTag" >> $env:GITHUB_OUTPUT
+
+      # ── 8. Create GitHub Release & upload installer ───────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "Winnow PC File Cleaner v${{ steps.ver.outputs.version }}"
-          body: |
-            ## Winnow PC File Cleaner v${{ steps.ver.outputs.version }}
-
-            ### Install
-            Download and run the installer below. The app will auto-detect future updates.
-
-            ### Upgrade
-            If you already have Winnow installed, click **Download & Install** inside the app,
-            or download the installer manually — it upgrades in-place.
-          files: installer/WinnowPCFileCleanerSetup-${{ steps.ver.outputs.version }}.exe
+          name: "Winnow v${{ steps.ver.outputs.version }}"
+          body_path: changelog.md
+          append_body: true
+          generate_release_notes: true
+          files: installer/WinnowSetup-${{ steps.ver.outputs.version }}.exe
           draft: false
           prerelease: false

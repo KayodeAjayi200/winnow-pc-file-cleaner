@@ -1,8 +1,8 @@
-# Winnow PC File Cleaner 🌾
+# Winnow 🌾
 
 > **Swipe through your files. Keep what matters. Delete the rest.**
 
-Winnow PC File Cleaner is a Windows desktop app that makes cleaning up your PC genuinely fun. Inspired by the swipe-left / swipe-right mechanic of dating apps, it turns the tedious task of file management into a satisfying, fast-paced experience.
+Winnow is a Windows desktop app that makes cleaning up your PC genuinely fun. Inspired by the swipe-left / swipe-right mechanic of dating apps, it turns the tedious task of file management into a satisfying, fast-paced experience.
 
 ---
 
@@ -76,7 +76,7 @@ dotnet publish /p:PublishProfile=win-x64-singlefile
 
 # 2. Compile installer (requires Inno Setup 6)
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer.iss
-# → installer\WinnowPCFileCleanerSetup-1.0.0.exe
+# → installer\WinnowSetup-1.0.0.exe
 ```
 
 ---
