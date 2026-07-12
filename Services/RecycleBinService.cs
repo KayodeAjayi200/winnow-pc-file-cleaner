@@ -58,9 +58,104 @@ public static class RecycleBinService
 
     /// <summary>
     /// Attempts to restore a file from the Recycle Bin to its original location.
-    /// Uses Shell32 COM automation. Returns true if restored.
+    /// Parses $RECYCLE.BIN\$I* metadata files directly (language-agnostic).
+    /// Falls back to Shell COM automation if direct parsing fails.
+    /// Returns true if the file was restored.
     /// </summary>
     public static bool RestoreFromRecycleBin(string originalPath)
+    {
+        return TryRestoreViaRecycleBinFiles(originalPath)
+            || TryRestoreViaCom(originalPath);
+    }
+
+    // ── Primary: parse $RECYCLE.BIN metadata ─────────────────────────────────
+
+    private static bool TryRestoreViaRecycleBinFiles(string originalPath)
+    {
+        try
+        {
+            var driveRoot = System.IO.Path.GetPathRoot(originalPath);
+            if (driveRoot == null) return false;
+
+            var recycleBin = System.IO.Path.Combine(driveRoot, "$RECYCLE.BIN");
+            if (!Directory.Exists(recycleBin)) return false;
+
+            foreach (var sidDir in Directory.GetDirectories(recycleBin))
+            {
+                try
+                {
+                    foreach (var iFile in Directory.GetFiles(sidDir, "$I*"))
+                    {
+                        try
+                        {
+                            if (!TryParseIFile(iFile, out var storedPath)) continue;
+                            if (!string.Equals(storedPath, originalPath, StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            // Derive the matching $R file from the $I name
+                            var baseName = System.IO.Path.GetFileNameWithoutExtension(iFile); // "$IXXXXXX"
+                            var rBase    = "$R" + baseName[2..];                              // "$RXXXXXX"
+                            var ext      = System.IO.Path.GetExtension(iFile);
+                            var rFile    = System.IO.Path.Combine(sidDir, rBase + ext);
+
+                            if (!File.Exists(rFile)) continue;
+
+                            var dir = System.IO.Path.GetDirectoryName(originalPath);
+                            if (dir != null) Directory.CreateDirectory(dir);
+
+                            File.Move(rFile, originalPath, overwrite: true);
+                            try { File.Delete(iFile); } catch { /* non-fatal */ }
+                            return true;
+                        }
+                        catch { /* skip unreadable $I file */ }
+                    }
+                }
+                catch { /* skip inaccessible SID dirs */ }
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    /// <summary>
+    /// Parses a Windows $I metadata file to extract the original file path.
+    /// Format: 8-byte version, 8-byte size, 8-byte FILETIME, then:
+    ///   v1 (Vista–8.1): 260 UTF-16 chars (fixed)
+    ///   v2 (Win10+):    4-byte char-count, then N UTF-16 chars
+    /// </summary>
+    private static bool TryParseIFile(string iFilePath, out string? originalPath)
+    {
+        originalPath = null;
+        try
+        {
+            using var fs = File.Open(iFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (fs.Length < 28) return false;
+
+            using var reader = new BinaryReader(fs, System.Text.Encoding.Unicode);
+            long version = reader.ReadInt64(); // signature / version
+            reader.ReadInt64();                // original file size
+            reader.ReadInt64();                // deletion FILETIME
+
+            if (version == 1) // Vista / 7 / 8 / 8.1
+            {
+                originalPath = new string(reader.ReadChars(260)).TrimEnd('\0');
+            }
+            else if (version == 2) // Windows 10 / 11
+            {
+                int charCount = reader.ReadInt32();
+                if (charCount is <= 0 or > 32_768) return false;
+                originalPath = new string(reader.ReadChars(charCount)).TrimEnd('\0');
+            }
+            else { return false; }
+
+            return !string.IsNullOrWhiteSpace(originalPath);
+        }
+        catch { return false; }
+    }
+
+    // ── Fallback: Shell COM automation ────────────────────────────────────────
+
+    private static bool TryRestoreViaCom(string originalPath)
     {
         try
         {
@@ -68,23 +163,23 @@ public static class RecycleBinService
                 System.Type.GetTypeFromProgID("Shell.Application")!)!;
             dynamic bin = shell.NameSpace(10); // 10 = Recycle Bin
 
+            var expectedName = System.IO.Path.GetFileName(originalPath);
+            var expectedDir  = System.IO.Path.GetDirectoryName(originalPath) ?? string.Empty;
+
             foreach (var item in bin.Items())
             {
-                // Column 1 = original location
-                string originalLocation = bin.GetDetailsOf(item, 1);
-                string name = item.Name;
-                var expected = System.IO.Path.GetDirectoryName(originalPath) ?? string.Empty;
-                var expectedName = System.IO.Path.GetFileName(originalPath);
+                string itemName     = item.Name;
+                string itemLocation = bin.GetDetailsOf(item, 1); // Original Location column
 
-                if (string.Equals(name, expectedName, StringComparison.OrdinalIgnoreCase)
-                    && originalLocation.Contains(expected, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(itemName, expectedName, StringComparison.OrdinalIgnoreCase)
+                    && itemLocation.Contains(expectedDir, StringComparison.OrdinalIgnoreCase))
                 {
                     item.InvokeVerb("undelete");
                     return true;
                 }
             }
         }
-        catch { /* COM errors or locale differences */ }
+        catch { }
         return false;
     }
 
