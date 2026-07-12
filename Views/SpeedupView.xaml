@@ -207,7 +207,9 @@
         <ScrollViewer x:Name="BootPanel" Grid.Row="1" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="40,32">
                 <TextBlock Text="My Boot Time" FontSize="22" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
-                <TextBlock Text="System performance overview since last restart" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,28"/>
+                <TextBlock Text="How long your PC takes to fully start up" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,28"/>
+
+                <!-- Hero: Boot Duration -->
                 <Border Style="{StaticResource MetricCard}" Margin="0,0,0,16">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -215,32 +217,60 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="PC Uptime" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
-                            <TextBlock x:Name="UptimeText" FontSize="28" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock x:Name="UptimeSubText" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0"/>
+                            <TextBlock Text="Last Boot Duration" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                            <TextBlock x:Name="BootDurationText" FontSize="40" FontWeight="Bold"
+                                       Foreground="{StaticResource AccentBrandBrush}"/>
+                            <TextBlock x:Name="BootDurationSubText" FontSize="12"
+                                       Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0"/>
                         </StackPanel>
-                        <TextBlock Grid.Column="1" Text="&#x1F5A5;&#xFE0F;" FontSize="36" FontFamily="Segoe UI Emoji" VerticalAlignment="Center" Opacity="0.5"/>
+                        <TextBlock Grid.Column="1" Text="⏱️" FontSize="40"
+                                   FontFamily="Segoe UI Emoji" VerticalAlignment="Center" Opacity="0.5"/>
                     </Grid>
                 </Border>
+
+                <!-- Uptime + Stats row -->
                 <Grid Margin="0,0,0,16">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="16"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="16"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Style="{StaticResource MetricCard}">
                         <StackPanel>
-                            <TextBlock x:Name="StartupCountText" FontSize="28" FontWeight="Bold" Foreground="#3B82F6" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Startup programs" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="UptimeText" FontSize="22" FontWeight="Bold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock Text="PC uptime" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="UptimeSubText" FontSize="11"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       HorizontalAlignment="Center" Margin="0,2,0,0" TextWrapping="Wrap"
+                                       TextAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="2" Style="{StaticResource MetricCard}">
                         <StackPanel>
-                            <TextBlock x:Name="BootHealthText" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Boot health" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="StartupCountText" FontSize="22" FontWeight="Bold"
+                                       Foreground="#3B82F6" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Startup programs" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="4" Style="{StaticResource MetricCard}">
+                        <StackPanel>
+                            <TextBlock x:Name="BootHealthText" FontSize="22" FontWeight="Bold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Boot health" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                 </Grid>
+
                 <Border x:Name="BootWarning" Background="#1A2520" BorderBrush="#2A4535" BorderThickness="1" CornerRadius="10" Padding="16,12" Margin="0,0,0,16" Visibility="Collapsed">
                     <StackPanel>
                         <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="#F59E0B" Margin="0,0,0,4">

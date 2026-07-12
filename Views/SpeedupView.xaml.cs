@@ -155,9 +155,24 @@ public partial class SpeedupView : UserControl
 
     private void PopulateBootTab()
     {
+        // Actual boot duration from Windows Event Log
+        var bootInfo = SpeedupService.GetLastBootInfo();
+        if (bootInfo != null)
+        {
+            BootDurationText.Text    = SpeedupService.FormatBootDuration(bootInfo.Duration);
+            BootDurationSubText.Text = $"Booted on {bootInfo.BootStart:ddd d MMM, h:mm tt}" +
+                                       (bootInfo.IsDegraded ? " · ⚠️ Degraded boot detected" : "");
+        }
+        else
+        {
+            BootDurationText.Text    = "—";
+            BootDurationSubText.Text = "Boot data not available";
+        }
+
+        // Uptime since last restart
         var uptime = SpeedupService.GetUptime();
         UptimeText.Text    = SpeedupService.FormatUptime(uptime);
-        UptimeSubText.Text = $"Last restarted: {DateTime.Now - uptime:dd\\d\\ hh\\:mm} ago";
+        UptimeSubText.Text = $"since {(DateTime.Now - uptime):ddd d MMM}";
 
         if (_items.Count == 0)
             _items = SpeedupService.GetStartupItems();
@@ -168,20 +183,19 @@ public partial class SpeedupView : UserControl
         var highEnabled = _items.Count(i => i.Impact == PerformanceImpact.High && i.IsEnabled);
         if (highEnabled == 0)
         {
-            BootHealthText.Text      = "Good ✅";
+            BootHealthText.Text       = "Good ✅";
             BootHealthText.Foreground = new System.Windows.Media.SolidColorBrush(
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#10B981"));
-            BootWarning.Visibility   = Visibility.Collapsed;
+            BootWarning.Visibility    = Visibility.Collapsed;
         }
         else
         {
-            BootHealthText.Text      = "Fair ⚠️";
+            BootHealthText.Text       = "Fair ⚠️";
             BootHealthText.Foreground = new System.Windows.Media.SolidColorBrush(
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#F59E0B"));
-
-            BootWarningTitle.Text  = $"{highEnabled} high-impact startup program{(highEnabled == 1 ? "" : "s")} enabled";
-            BootWarningDetail.Text = "These programs slow down your boot time. Use Easy Speedup or Manual to disable them.";
-            BootWarning.Visibility = Visibility.Visible;
+            BootWarningTitle.Text     = $"{highEnabled} high-impact startup program{(highEnabled == 1 ? "" : "s")} enabled";
+            BootWarningDetail.Text    = "These programs slow down your boot time. Use Easy Speedup or Manual to disable them.";
+            BootWarning.Visibility    = Visibility.Visible;
         }
     }
 
