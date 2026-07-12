@@ -189,7 +189,8 @@
                                                   Content="{TemplateBinding SelectionBoxItem}"
                                                   ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                                   Margin="{TemplateBinding Padding}"
-                                                  VerticalAlignment="Center"/>
+                                                  VerticalAlignment="Center"
+                                                  TextElement.Foreground="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
                                 <TextBlock Grid.Column="1" Text="▾"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            VerticalAlignment="Center"/>
