@@ -73,8 +73,9 @@
                             <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding Tag, ElementName=SpeedupToggleButton}" Value="Active">
-                                        <Setter Property="Background" Value="#1A2563EB"/>
-                                        <Setter Property="BorderBrush" Value="#2563EB"/>
+                                        <Setter Property="Background"   Value="#2563EB"/>
+                                        <Setter Property="BorderBrush"  Value="#2563EB"/>
+                                        <Setter Property="Foreground"   Value="White"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -95,8 +96,9 @@
                             <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding Tag, ElementName=CleanupToggleButton}" Value="Active">
-                                        <Setter Property="Background" Value="#1A7C3AED"/>
-                                        <Setter Property="BorderBrush" Value="#7C3AED"/>
+                                        <Setter Property="Background"   Value="#7C3AED"/>
+                                        <Setter Property="BorderBrush"  Value="#7C3AED"/>
+                                        <Setter Property="Foreground"   Value="White"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>

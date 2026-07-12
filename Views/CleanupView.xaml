@@ -354,8 +354,8 @@
                                        VerticalAlignment="Center"
                                        Width="80"/>
                             <ComboBox x:Name="WeekDayCombo"
+                                      Style="{StaticResource FilterComboStyle}"
                                       FontSize="13"
-                                      Foreground="{StaticResource TextPrimaryBrush}"
                                       Width="120"
                                       SelectionChanged="Schedule_Changed"/>
                         </StackPanel>
@@ -368,9 +368,9 @@
                                        VerticalAlignment="Center"
                                        Width="80"/>
                             <ComboBox x:Name="HourCombo"
+                                      Style="{StaticResource FilterComboStyle}"
                                       Width="60"
                                       FontSize="13"
-                                      Foreground="{StaticResource TextPrimaryBrush}"
                                       Margin="0,0,6,0"
                                       SelectionChanged="Schedule_Changed"/>
                             <TextBlock Text=":"
@@ -379,9 +379,9 @@
                                        VerticalAlignment="Center"
                                        Margin="0,0,6,0"/>
                             <ComboBox x:Name="MinuteCombo"
+                                      Style="{StaticResource FilterComboStyle}"
                                       Width="60"
                                       FontSize="13"
-                                      Foreground="{StaticResource TextPrimaryBrush}"
                                       SelectionChanged="Schedule_Changed"/>
                         </StackPanel>
 
