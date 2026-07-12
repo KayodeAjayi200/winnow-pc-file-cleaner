@@ -12,6 +12,12 @@ public static class UpdateService
     private const string Owner = "KayodeAjayi200";
     private const string Repo  = "winnow-pc-file-cleaner";
 
+    private static readonly string _dataDir =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Winnow");
+
+    private static readonly string _lastSeenPath =
+        Path.Combine(_dataDir, "last-seen-version.txt");
+
     private static readonly HttpClient _http = new()
     {
         Timeout = TimeSpan.FromSeconds(15),
@@ -109,6 +115,43 @@ public static class UpdateService
 
         System.Windows.Application.Current.Dispatcher.Invoke(
             System.Windows.Application.Current.Shutdown);
+    }
+
+    // ── What's New tracking ───────────────────────────────────────────────────
+
+    public static string GetLastSeenVersion()
+    {
+        try { return File.Exists(_lastSeenPath) ? File.ReadAllText(_lastSeenPath).Trim() : ""; }
+        catch { return ""; }
+    }
+
+    public static void SaveLastSeenVersion(string version)
+    {
+        try
+        {
+            Directory.CreateDirectory(_dataDir);
+            File.WriteAllText(_lastSeenPath, version);
+        }
+        catch { }
+    }
+
+    public static bool ShouldShowWhatsNew()
+        => GetLastSeenVersion() != CurrentVersion;
+
+    /// <summary>
+    /// Fetches the release notes for the currently running version from GitHub.
+    /// Returns null if the release doesn't exist yet or on any error.
+    /// </summary>
+    public static async Task<string?> GetCurrentReleaseNotesAsync()
+    {
+        try
+        {
+            var url  = $"https://api.github.com/repos/{Owner}/{Repo}/releases/tags/v{CurrentVersion}";
+            var json = await _http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.TryGetProperty("body", out var b) ? b.GetString() : null;
+        }
+        catch { return null; }
     }
 
     private static bool IsNewer(string latest, string current)

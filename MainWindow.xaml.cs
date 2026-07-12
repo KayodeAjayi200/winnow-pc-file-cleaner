@@ -43,6 +43,24 @@ public partial class MainWindow : Window
 
             // Check for updates in background — never blocks startup
             await _vm.CheckForUpdatesAsync();
+
+            // Show What's New if this is the first launch after an update
+            if (UpdateService.ShouldShowWhatsNew())
+            {
+                var notes = await UpdateService.GetCurrentReleaseNotesAsync();
+                // Only show if we got real notes (empty = first ever install, skip)
+                if (!string.IsNullOrWhiteSpace(notes) && UpdateService.GetLastSeenVersion() != "")
+                {
+                    var dlg = new WhatsNewDialog(UpdateService.CurrentVersion, notes) { Owner = this };
+                    dlg.ShowDialog();
+                }
+                else
+                {
+                    // First install — just mark as seen silently
+                    UpdateService.SaveLastSeenVersion(UpdateService.CurrentVersion);
+                }
+                CardStack.Focus();
+            }
         };
     }
 

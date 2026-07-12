@@ -70,17 +70,32 @@ jobs:
         id: changelog
         shell: pwsh
         run: |
-          # Get previous tag (the one before the tag being released)
           $prevTag = git describe --tags --abbrev=0 HEAD^ 2>$null
           if ($LASTEXITCODE -ne 0 -or -not $prevTag) {
-            $log = git log --pretty=format:"- %s" | Select-Object -First 30
+            $all = git log --pretty=format:"%s" | Select-Object -First 30
           } else {
-            $log = git log "$prevTag..HEAD" --pretty=format:"- %s"
+            $all = git log "$prevTag..HEAD" --pretty=format:"%s"
           }
-          $notes = $log -join "`n"
-          # Write to a file to avoid quoting issues
-          $notes | Out-File -FilePath changelog.md -Encoding utf8
-          echo "prev_tag=$prevTag" >> $env:GITHUB_OUTPUT
+          $all = $all | Where-Object { $_ -notmatch "^Release v" -and $_ -notmatch "^Merge " }
+
+          $feat = $all | Where-Object { $_ -match "\b(add|new|feat|introduc|support|implement|creat|enabl|allow)\b" }
+          $fix  = $all | Where-Object { $_ -match "\b(fix|bug|crash|error|broken|revert|patch|correct|resolv)\b" }
+          $impr = $all | Where-Object { $_ -notin $feat -and $_ -notin $fix }
+
+          $md = @()
+          if ($feat) { $md += "### ✨ What's New"; $feat | ForEach-Object { $md += "- $_" }; $md += "" }
+          if ($fix)  { $md += "### 🐛 Bug Fixes";  $fix  | ForEach-Object { $md += "- $_" }; $md += "" }
+          if ($impr) { $md += "### 🔧 Improvements"; $impr | ForEach-Object { $md += "- $_" }; $md += "" }
+          if (-not $md) { $md = @("No notable changes.") }
+
+          $md += "---"
+          $md += "### Install"
+          $md += "Download and run the installer below. The app will notify you of future updates automatically."
+          $md += ""
+          $md += "### Upgrade"
+          $md += "Already have Winnow? Click **Download & Install** inside the app, or run the installer — it upgrades in-place."
+
+          ($md -join "`n") | Out-File -FilePath changelog.md -Encoding utf8
 
       # ── 8. Create GitHub Release & upload installer ───────────────────────────
       - name: Create GitHub Release

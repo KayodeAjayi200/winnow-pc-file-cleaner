@@ -37,20 +37,48 @@ git push origin HEAD --tags
 # ── 5. Generate changelog from commits since last tag ─────────────────────────
 $prevTag = git describe --tags --abbrev=0 HEAD^ 2>$null
 if ($prevTag) {
-    $commits = git log "$prevTag..HEAD" --pretty=format:"- %s" |
-               Where-Object { $_ -notmatch "^- Release v" }
+    $allCommits = git log "$prevTag..HEAD" --pretty=format:"%s" |
+                  Where-Object { $_ -notmatch "^Release v" -and $_ -notmatch "^Merge " }
 } else {
-    $commits = git log --pretty=format:"- %s" | Select-Object -First 20 |
-               Where-Object { $_ -notmatch "^- Release v" }
+    $allCommits = git log --pretty=format:"%s" | Select-Object -First 30 |
+                  Where-Object { $_ -notmatch "^Release v" -and $_ -notmatch "^Merge " }
 }
 
-$notes = @"
-### What's new
-$($commits -join "`n")
+$features = $allCommits | Where-Object {
+    $_ -match "\b(add|new|feat|introduc|support|implement|creat|enabl|allow)\b"
+}
+$bugfixes = $allCommits | Where-Object {
+    $_ -match "\b(fix|bug|crash|error|broken|revert|patch|correct|resolv)\b"
+}
+$other    = $allCommits | Where-Object {
+    $_ -notin $features -and $_ -notin $bugfixes
+}
+
+$sections = @()
+if ($features) {
+    $sections += "### ✨ What's New"
+    $sections += $features | ForEach-Object { "- $_" }
+    $sections += ""
+}
+if ($bugfixes) {
+    $sections += "### 🐛 Bug Fixes"
+    $sections += $bugfixes | ForEach-Object { "- $_" }
+    $sections += ""
+}
+if ($other) {
+    $sections += "### 🔧 Improvements"
+    $sections += $other | ForEach-Object { "- $_" }
+    $sections += ""
+}
+if (-not $sections) {
+    $sections = @("No notable changes.")
+}
+
+$notes = ($sections -join "`n") + @"
 
 ---
 ### Install
-Download and run the installer below. The app will auto-detect future updates.
+Download and run the installer below. The app will notify you of future updates automatically.
 
 ### Upgrade
 Already have Winnow? Click **Download & Install** inside the app, or run the installer — it upgrades in-place.
