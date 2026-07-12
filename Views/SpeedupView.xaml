@@ -156,11 +156,12 @@
                         </Border>
                     </Grid>
                     <Button x:Name="OptimizeBtn" Style="{StaticResource SpeedupPrimaryBtn}" HorizontalAlignment="Center" Margin="0,0,0,16" Click="Optimize_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#x26A1; " FontFamily="Segoe UI Emoji" FontSize="15"/>
-                            <TextBlock Text="Disable all high-impact items" FontSize="15" FontWeight="SemiBold"/>
-                        </StackPanel>
+                        <TextBlock x:Name="OptimizeBtnText" Text="&#x26A1; Disable all high-impact items" FontSize="15" FontWeight="SemiBold"/>
                     </Button>
+                    <!-- Good startup banner (shown when nothing to optimize) -->
+                    <Border x:Name="OptimizeGoodBanner" Background="#1A10B981" BorderBrush="#3010B981" BorderThickness="1" CornerRadius="10" Padding="16,10" Margin="0,0,0,16" Visibility="Collapsed" HorizontalAlignment="Center">
+                        <TextBlock Text="✅ Your startup looks great — no high or medium impact items found!" FontSize="13" Foreground="#6EE7B7"/>
+                    </Border>
                     <Border x:Name="OptimizeBanner" Background="#1A10B981" BorderBrush="#3010B981" BorderThickness="1" CornerRadius="10" Padding="16,10" Margin="0,0,0,16" Visibility="Collapsed" HorizontalAlignment="Center">
                         <TextBlock x:Name="OptimizeBannerText" FontSize="13" Foreground="#6EE7B7"/>
                     </Border>

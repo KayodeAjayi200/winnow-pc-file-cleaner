@@ -11,7 +11,11 @@ public partial class SpeedupView : UserControl
     public SpeedupView()
     {
         InitializeComponent();
-        Loaded += (_, _) => PopulateBootTab();
+        Loaded += (_, _) =>
+        {
+            try { PopulateBootTab(); }
+            catch { /* registry unavailable — safe to ignore */ }
+        };
     }
 
     // ── Tab switching ─────────────────────────────────────────────────────────
@@ -62,7 +66,11 @@ public partial class SpeedupView : UserControl
         EasyScanning.Visibility = Visibility.Visible;
         OptimizeBanner.Visibility = Visibility.Collapsed;
 
-        _items = await Task.Run(() => SpeedupService.GetStartupItems());
+        _items = await Task.Run(() =>
+        {
+            try { return SpeedupService.GetStartupItems(); }
+            catch { return new List<StartupItem>(); }
+        });
 
         EasyScanning.Visibility = Visibility.Collapsed;
 
@@ -75,16 +83,32 @@ public partial class SpeedupView : UserControl
         LowCountText.Text  = low.ToString();
 
         var highItems = _items.Where(i => i.Impact == PerformanceImpact.High).ToList();
-        OptimizeBtn.IsEnabled = highItems.Count > 0;
+        var medItems  = _items.Where(i => i.Impact == PerformanceImpact.Medium && i.IsEnabled && i.CanToggle).ToList();
 
         if (highItems.Count > 0)
         {
+            // High-impact items found — standard optimize flow
+            OptimizeBtn.IsEnabled  = true;
+            OptimizeBtnText.Text   = "⚡ Disable all high-impact items";
             HighImpactList.ItemsSource  = highItems;
             HighImpactSection.Visibility = Visibility.Visible;
+            OptimizeGoodBanner.Visibility = Visibility.Collapsed;
+        }
+        else if (medItems.Count > 0)
+        {
+            // No high items but medium items exist — offer to manage those
+            OptimizeBtn.IsEnabled  = true;
+            OptimizeBtnText.Text   = $"⚡ Disable {medItems.Count} medium-impact item{(medItems.Count == 1 ? "" : "s")}";
+            HighImpactSection.Visibility = Visibility.Collapsed;
+            OptimizeGoodBanner.Visibility = Visibility.Collapsed;
         }
         else
         {
+            // Nothing to do — startup is clean
+            OptimizeBtn.IsEnabled  = false;
+            OptimizeBtnText.Text   = "⚡ Nothing to optimize";
             HighImpactSection.Visibility = Visibility.Collapsed;
+            OptimizeGoodBanner.Visibility = Visibility.Visible;
         }
 
         EasyResults.Visibility = Visibility.Visible;
@@ -92,12 +116,16 @@ public partial class SpeedupView : UserControl
 
     private void Optimize_Click(object sender, RoutedEventArgs e)
     {
+        // Disable high-impact items first, then medium if none high
         var highEnabled = _items
             .Where(i => i.Impact == PerformanceImpact.High && i.IsEnabled && i.CanToggle)
             .ToList();
+        var targetItems = highEnabled.Count > 0
+            ? highEnabled
+            : _items.Where(i => i.Impact == PerformanceImpact.Medium && i.IsEnabled && i.CanToggle).ToList();
 
         int disabled = 0;
-        foreach (var item in highEnabled)
+        foreach (var item in targetItems)
         {
             if (SpeedupService.SetItemEnabled(item, false))
             {
@@ -106,19 +134,19 @@ public partial class SpeedupView : UserControl
                 {
                     Action   = "Disabled",
                     ItemName = item.Name,
-                    Details  = $"High-impact item disabled via Easy Speedup. Location: {item.LocationLabel}"
+                    Details  = $"{item.ImpactLabel}-impact item disabled via Easy Speedup. Location: {item.LocationLabel}"
                 });
             }
         }
 
         OptimizeBanner.Visibility = Visibility.Visible;
         OptimizeBannerText.Text = disabled > 0
-            ? $"✅ Disabled {disabled} high-impact item{(disabled == 1 ? "" : "s")}. Restart to see improvement."
-            : "ℹ️ No eligible high-impact items to disable (some may require admin rights).";
+            ? $"✅ Disabled {disabled} item{(disabled == 1 ? "" : "s")}. Restart to see improvement."
+            : "ℹ️ No eligible items to disable (some may require admin rights).";
 
         OptimizeBtn.IsEnabled = false;
 
-        // Refresh the high-impact list so "Disable" labels update
+        // Refresh lists
         HighImpactList.ItemsSource = null;
         HighImpactList.ItemsSource = _items.Where(i => i.Impact == PerformanceImpact.High).ToList();
     }
