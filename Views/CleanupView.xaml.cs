@@ -136,7 +136,6 @@ public partial class CleanupView : UserControl
         switch (_phase)
         {
             case Phase.Ready:
-            case Phase.Scanned:
                 await RunScanAsync();
                 break;
 
@@ -144,7 +143,10 @@ public partial class CleanupView : UserControl
                 await RunScanAsync(); // re-scan
                 break;
 
-            default: /* scanning/cleaning — ignore */ break;
+            // Phase.Scanned is handled exclusively by CleanButton_Click
+            // (wired dynamically in SetUiScanned). Falling through here would
+            // re-run the scan instead of cleaning.
+            default: break;
         }
     }
 

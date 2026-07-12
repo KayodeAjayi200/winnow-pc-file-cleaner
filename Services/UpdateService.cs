@@ -19,8 +19,7 @@ public static class UpdateService
     };
 
     /// <summary>The version embedded in the running assembly (e.g. "1.0.3").</summary>
-    public static string CurrentVersion =>
-        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
+    public static string CurrentVersion => CurrentDisplayVersion;
 
     /// <summary>The release label shown in the UI, formatted as yyyyMMdd.increment.</summary>
     public static string CurrentDisplayVersion =>
@@ -28,7 +27,7 @@ public static class UpdateService
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion
             .Split('+')[0]
-        ?? CurrentVersion;
+        ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
 
     /// <summary>
     /// Hits the GitHub releases API and returns info if a newer version is available.
@@ -114,9 +113,27 @@ public static class UpdateService
 
     private static bool IsNewer(string latest, string current)
     {
-        if (!Version.TryParse(Normalise(latest),  out var l)) return false;
-        if (!Version.TryParse(Normalise(current), out var c)) return false;
-        return l > c;
+        // Try standard semantic version first
+        if (Version.TryParse(Normalise(latest),  out var l) &&
+            Version.TryParse(Normalise(current), out var c))
+            return l > c;
+
+        // Fall back to component-by-component long comparison (handles yyyyMMdd.N)
+        return CompareComponents(latest, current) > 0;
+    }
+
+    private static int CompareComponents(string a, string b)
+    {
+        var pa = a.Split('.').Select(s => long.TryParse(s, out var n) ? n : 0L).ToArray();
+        var pb = b.Split('.').Select(s => long.TryParse(s, out var n) ? n : 0L).ToArray();
+        int len = Math.Max(pa.Length, pb.Length);
+        for (int i = 0; i < len; i++)
+        {
+            long av = i < pa.Length ? pa[i] : 0L;
+            long bv = i < pb.Length ? pb[i] : 0L;
+            if (av != bv) return av.CompareTo(bv);
+        }
+        return 0;
     }
 
     // Ensure at least two components for Version.Parse
