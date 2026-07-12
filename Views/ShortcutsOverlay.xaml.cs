@@ -18,17 +18,18 @@ public partial class ShortcutsOverlay : Window
 
         ShortcutList.ItemsSource = new[]
         {
-            new ShortcutRow("←",          "or swipe left",  "Delete file (to Recycle Bin)"),
-            new ShortcutRow("→",          "or swipe right", "Keep file"),
-            new ShortcutRow("B",          "",               "Add to review bucket"),
-            new ShortcutRow("Ctrl+Z",     "↩  button",      "Undo last delete"),
-            new ShortcutRow("O",          "",               "Open file in default app"),
-            new ShortcutRow("Space",      "",               "Preview file"),
-            new ShortcutRow("Del",        "",               "Delete (same as ←)"),
-            new ShortcutRow("?",          "",               "Show / hide this overlay"),
-            new ShortcutRow("Ctrl+Z",     "",               "Undo last swipe"),
-            new ShortcutRow("R",          "",               "Reload current folder"),
-            new ShortcutRow("Escape",     "",               "Close dialogs / overlays"),
+            // Navigation / swiping
+            new ShortcutRow("←  /  →",    "or drag card",   "Delete / Keep file"),
+            new ShortcutRow("Del",         "",               "Delete (same as ←)"),
+            new ShortcutRow("Ctrl+Z",      "↩ button",       "Undo last action"),
+            // File actions
+            new ShortcutRow("B",           "",               "Add to review bucket"),
+            new ShortcutRow("O  /  Space", "",               "Open file in default app"),
+            new ShortcutRow("L",           "",               "Show file in Explorer"),
+            // App
+            new ShortcutRow("R",           "",               "Reload current folder"),
+            new ShortcutRow("?",           "",               "Show / hide this overlay"),
+            new ShortcutRow("Escape",      "",               "Close dialogs / overlays"),
         };
     }
 }

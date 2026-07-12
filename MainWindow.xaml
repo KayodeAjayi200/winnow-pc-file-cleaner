@@ -9,12 +9,19 @@
         Width="1020" Height="720"
         MinWidth="800" MinHeight="620"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource BgDeepBrush}">
+        Background="{StaticResource BgDeepBrush}"
+        PreviewKeyDown="Window_PreviewKeyDown">
 
     <Window.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisInv" Invert="True"/>
     </Window.Resources>
+
+    <!-- Window-level keyboard shortcuts -->
+    <Window.InputBindings>
+        <KeyBinding Key="R"      Command="{Binding RefreshCommand}"/>
+        <KeyBinding Key="Z"      Modifiers="Ctrl" Command="{Binding UndoCommand}"/>
+    </Window.InputBindings>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -110,24 +117,6 @@
                         <TextBlock Text="?" FontSize="15" FontWeight="Bold"
                                    Foreground="{StaticResource TextSecondaryBrush}"/>
                     </Button>
-                    <Button x:Name="MuteButton"
-                            Background="Transparent" BorderThickness="0"
-                            Cursor="Hand" Padding="6,2"
-                            ToolTip="Toggle mute"
-                            AutomationProperties.Name="Toggle mute"
-                            Click="MuteButton_Click">
-                        <TextBlock x:Name="MuteIcon" Text="🔊" FontSize="16"
-                                   FontFamily="Segoe UI Emoji"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Button>
-                    <Slider x:Name="VolumeSlider"
-                            Minimum="0" Maximum="1"
-                            Value="0.55"
-                            Width="80"
-                            VerticalAlignment="Center"
-                            ToolTip="Volume"
-                            AutomationProperties.Name="Volume"
-                            ValueChanged="VolumeSlider_ValueChanged"/>
                 </StackPanel>
             </Grid>
         </Border>

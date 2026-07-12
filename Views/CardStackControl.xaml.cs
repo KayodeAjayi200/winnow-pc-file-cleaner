@@ -73,7 +73,15 @@ public partial class CardStackControl : System.Windows.Controls.UserControl
         {
             case Key.Left:  CommitSwipe(isKeep: false); break;
             case Key.Right: CommitSwipe(isKeep: true);  break;
-            case Key.B:     VM.AddToNewBucket(); SoundService.Instance.PlayBucket(); break;
+            case Key.B:     VM.AddToNewBucket(); break;
+            case Key.Delete:
+            case Key.Back:
+                CommitSwipe(isKeep: false);
+                break;
+            case Key.Space:
+                if (VM?.CurrentFile is { } fSpace)
+                    FilePreviewControl.OpenInDefaultApp(fSpace);
+                break;
             case Key.O:
                 if (VM?.CurrentFile is { } f)
                     FilePreviewControl.OpenInDefaultApp(f);
@@ -198,8 +206,6 @@ public partial class CardStackControl : System.Windows.Controls.UserControl
 
     private void SnapBack()
     {
-        SoundService.Instance.PlaySnapBack();
-
         var duration = new Duration(TimeSpan.FromMilliseconds(300));
         var ease     = new ElasticEase { Springiness = 3, Oscillations = 1 };
 
@@ -238,8 +244,8 @@ public partial class CardStackControl : System.Windows.Controls.UserControl
         {
             Dispatcher.Invoke(() =>
             {
-                if (isKeep) { VM?.Keep();   SoundService.Instance.PlayKeep();   }
-                else        { VM?.Delete(); SoundService.Instance.PlayDelete(); }
+                if (isKeep) { VM?.Keep();   }
+                else        { VM?.Delete(); }
 
                 PlayBackCardsCascade();
                 ResetCardTransform();

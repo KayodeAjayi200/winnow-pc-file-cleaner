@@ -27,7 +27,7 @@ public partial class MainWindow : Window
         // Wire buckets panel to the VM's Buckets collection
         BucketsPanelControl.BucketList.ItemsSource = _vm.Buckets;
 
-        // Ctrl+Z → Undo
+        // Ctrl+Z also handled via XAML InputBindings; keep for focus-independent coverage
         InputBindings.Add(new KeyBinding(_vm.UndoCommand, new KeyGesture(Key.Z, ModifierKeys.Control)));
 
         // Return focus to card stack whenever a scan finishes
@@ -40,13 +40,21 @@ public partial class MainWindow : Window
         Loaded += async (_, _) =>
         {
             CardStack.Focus();
-            // Sync mute icon to the default muted state
-            MuteIcon.Text = SoundService.Instance.MuteIcon;
-            VolumeSlider.IsEnabled = !SoundService.Instance.IsMuted;
 
             // Check for updates in background — never blocks startup
             await _vm.CheckForUpdatesAsync();
         };
+    }
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        // ? key → show keyboard shortcuts overlay (works regardless of focus)
+        if (e.Key == Key.OemQuestion && e.KeyboardDevice.Modifiers == ModifierKeys.None)
+        {
+            new ShortcutsOverlay { Owner = this }.ShowDialog();
+            CardStack.Focus();
+            e.Handled = true;
+        }
     }
 
     // ── Panel toggle ──────────────────────────────────────────────────────────
@@ -159,20 +167,6 @@ public partial class MainWindow : Window
             bucket.IsExpanded = true;
         }
         CardStack.Focus();
-    }
-
-    private void MuteButton_Click(object sender, RoutedEventArgs e)
-    {
-        var snd = SoundService.Instance;
-        snd.IsMuted      = !snd.IsMuted;
-        MuteIcon.Text    = snd.MuteIcon;
-        VolumeSlider.IsEnabled = !snd.IsMuted;
-        CardStack.Focus();
-    }
-
-    private void VolumeSlider_ValueChanged(object sender, System.Windows.RoutedPropertyChangedEventArgs<double> e)
-    {
-        SoundService.Instance.Volume = e.NewValue;
     }
 
     private void ShortcutsButton_Click(object sender, RoutedEventArgs e)
