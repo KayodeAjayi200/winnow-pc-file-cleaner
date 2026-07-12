@@ -4,7 +4,39 @@
 
     <Grid x:Name="RootGrid"
           Background="#0F0F0F"
-          ClipToBounds="True">
+          ClipToBounds="True"
+          Cursor="Hand"
+          ToolTip="Click to open in default app"
+          MouseLeftButtonUp="RootGrid_Click">
+
+        <!-- Hover highlight -->
+        <Border x:Name="HoverOverlay"
+                Background="#18FFFFFF"
+                Opacity="0"
+                IsHitTestVisible="False">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                            <DataTrigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </DataTrigger.EnterActions>
+                            <DataTrigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.18"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </DataTrigger.ExitActions>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        </Border>
 
         <!-- ── Image preview ───────────────────────────────────────── -->
         <Image x:Name="ImagePreview"

@@ -372,6 +372,12 @@ public partial class FilePreviewControl : UserControl
         ShowFallbackIcon("🎬", "Can't play video");
     }
 
+    private void RootGrid_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (FileItem != null && LoadingText.Visibility != Visibility.Visible)
+            OpenInDefaultApp(FileItem);
+    }
+
     private void VideoPlayOverlay_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         e.Handled = true;
