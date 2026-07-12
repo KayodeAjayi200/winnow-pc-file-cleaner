@@ -42,7 +42,12 @@ public partial class FileGridView : UserControl
     private void Vm_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainViewModel.AllFiles) && sender is MainViewModel vm)
+        {
+            // Null-then-set forces WPF to detect the change even when
+            // AllFiles returns the same List<FileItem> reference each time.
+            TileList.ItemsSource = null;
             TileList.ItemsSource = vm.AllFiles;
+        }
     }
 
     // ── Tile clicked → select ─────────────────────────────────────────────────

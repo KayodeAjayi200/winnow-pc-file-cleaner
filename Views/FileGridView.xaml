@@ -23,9 +23,9 @@
                     ClipToBounds="True">
 
                 <Grid>
-                    <!-- Thumbnail (image files) -->
+                    <!-- Thumbnail — loaded async via Shell API -->
                     <Image x:Name="ThumbImage"
-                           Source="{Binding FullPath, Converter={StaticResource ThumbnailConverter}}"
+                           Source="{Binding FullPath, Converter={StaticResource ThumbnailConverter}, IsAsync=True}"
                            Stretch="UniformToFill"
                            Visibility="Collapsed"/>
 

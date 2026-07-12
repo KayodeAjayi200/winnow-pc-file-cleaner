@@ -75,19 +75,11 @@ public class FileItemThumbnailConverter : IValueConverter
     public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is not string path || !File.Exists(path)) return null;
-        try
-        {
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.UriSource        = new Uri(path);
-            bmp.DecodePixelWidth = 240;
-            bmp.CacheOption      = BitmapCacheOption.OnLoad;
-            bmp.CreateOptions    = BitmapCreateOptions.DelayCreation;
-            bmp.EndInit();
-            bmp.Freeze();
-            return bmp;
-        }
-        catch { return null; }
+
+        // Always use the Windows Shell thumbnail — works for images, videos,
+        // documents, and any other file type.  Runs on a background thread
+        // (binding uses IsAsync=True in the XAML).
+        return FileTinder.Services.ShellThumbnailService.GetThumbnail(path);
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

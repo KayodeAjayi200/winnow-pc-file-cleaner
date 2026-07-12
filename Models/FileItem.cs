@@ -46,8 +46,8 @@ public class FileItem : INotifyPropertyChanged
 
     public string? DuplicateGroupKey { get; set; }
 
-    /// <summary>True when a local thumbnail can be rendered (local image files only).</summary>
-    public bool HasThumbnail => !IsMtp && Category == FileTypeCategory.Image;
+    /// <summary>True when a shell thumbnail can be fetched (all local files).</summary>
+    public bool HasThumbnail => !IsMtp;
 
     public string DuplicateBadgeText =>
         IsDuplicate ? $"🔄  {DuplicateCount} copies detected" : string.Empty;

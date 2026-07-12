@@ -30,7 +30,10 @@ public partial class FileListView : UserControl
     private void Vm_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainViewModel.AllFiles) && sender is MainViewModel vm)
+        {
+            FileDataGrid.ItemsSource = null;
             FileDataGrid.ItemsSource = vm.AllFiles;
+        }
     }
 
     private MainViewModel? Vm => DataContext as MainViewModel;
