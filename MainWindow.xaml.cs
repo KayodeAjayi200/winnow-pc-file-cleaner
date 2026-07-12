@@ -41,6 +41,7 @@ public partial class MainWindow : Window
         {
             CardStack.Focus();
 
+#if !STORE_BUILD
             // Check for updates in background — never blocks startup
             await _vm.CheckForUpdatesAsync();
 
@@ -61,6 +62,7 @@ public partial class MainWindow : Window
                 }
                 CardStack.Focus();
             }
+#endif
         };
     }
 

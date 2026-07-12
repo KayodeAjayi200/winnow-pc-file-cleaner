@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  BEFORE SUBMITTING TO MICROSOFT STORE — update these three values:      │
+  │                                                                          │
+  │  1. Identity/@Name       — from Partner Center > App identity            │
+  │     e.g. "KayodeAjayi200.Winnow"                                        │
+  │  2. Identity/@Publisher  — CN= from Partner Center > App identity        │
+  │     e.g. "CN=KayodeAjayi200, ..."                                       │
+  │  3. Properties/PublisherDisplayName — your display name on the Store     │
+  └─────────────────────────────────────────────────────────────────────────┘
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="WinnowApp.Winnow"
+    Publisher="CN=WinnowApp"
+    Version="1.2.0.0" />
+
+  <Properties>
+    <DisplayName>Winnow</DisplayName>
+    <PublisherDisplayName>Winnow</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-US" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App"
+      Executable="$targetnametoken$.exe"
+      EntryPoint="$targetentrypoint$">
+      <uap:VisualElements
+        DisplayName="Winnow"
+        Description="Smart file manager — swipe, clean, and speed up your PC"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png"
+          ShortName="Winnow" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#1A1A2E" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- Full-trust desktop app: needs file system, event log, registry access -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+</Package>

@@ -16,8 +16,26 @@
     <InformationalVersion>20260712.10</InformationalVersion>
   </PropertyGroup>
 
+  <!-- ── Microsoft Store (MSIX) build configuration ── -->
+  <!-- Build with: dotnet publish -c Store -r win-x64 -->
+  <PropertyGroup Condition="'$(Configuration)'=='Store'">
+    <WindowsPackageType>MSIX</WindowsPackageType>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- Disable GitHub self-updater — the Store handles updates -->
+    <DefineConstants>$(DefineConstants);STORE_BUILD</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <Resource Include="app.ico"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Store / MSIX visual assets -->
+    <Content Include="Assets\**\*.png" Condition="Exists('Assets')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
