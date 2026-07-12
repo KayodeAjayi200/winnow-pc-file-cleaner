@@ -28,12 +28,14 @@ public partial class SpeedupView : UserControl
         // Reset all tabs to inactive
         TabEasyBtn.Style    = (Style)Resources["SpeedupTabBtn"];
         TabBootBtn.Style    = (Style)Resources["SpeedupTabBtn"];
+        TabDriversBtn.Style = (Style)Resources["SpeedupTabBtn"];
         TabManualBtn.Style  = (Style)Resources["SpeedupTabBtn"];
         TabHistoryBtn.Style = (Style)Resources["SpeedupTabBtn"];
         btn.Style = (Style)Resources["SpeedupTabBtnActive"];
 
         EasyPanel.Visibility    = Visibility.Collapsed;
         BootPanel.Visibility    = Visibility.Collapsed;
+        DriversPanel.Visibility = Visibility.Collapsed;
         ManualPanel.Visibility  = Visibility.Collapsed;
         HistoryPanel.Visibility = Visibility.Collapsed;
 
@@ -45,6 +47,9 @@ public partial class SpeedupView : UserControl
             case "Boot":
                 BootPanel.Visibility = Visibility.Visible;
                 PopulateBootTab();
+                break;
+            case "Drivers":
+                DriversPanel.Visibility = Visibility.Visible;
                 break;
             case "Manual":
                 ManualPanel.Visibility = Visibility.Visible;
@@ -250,4 +255,181 @@ public partial class SpeedupView : UserControl
         HistoryList.ItemsSource     = history;
         HistoryEmptyText.Visibility = history.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    // ── Drivers ───────────────────────────────────────────────────────────────
+
+    private async void DriverScan_Click(object sender, RoutedEventArgs e)
+    {
+        DriversIdle.Visibility     = Visibility.Collapsed;
+        DriversResults.Visibility  = Visibility.Collapsed;
+        DriversScanning.Visibility = Visibility.Visible;
+
+        var drivers = await DriverService.ScanAsync();
+
+        DriversScanning.Visibility = Visibility.Collapsed;
+        PopulateDriverResults(drivers);
+        DriversResults.Visibility = Visibility.Visible;
+    }
+
+    private void PopulateDriverResults(List<DriverInfo> drivers)
+    {
+        var outdated = drivers.Count(d =>
+            d.Status is DriverStatus.Outdated or DriverStatus.VeryOld);
+
+        DriversSummaryText.Text = outdated > 0
+            ? $"{outdated} driver{(outdated == 1 ? "" : "s")} may need updating"
+            : "All drivers appear up to date";
+        DriversSubText.Text = $"{drivers.Count} drivers scanned · Windows Update can update most automatically";
+
+        DriversCategoryStack.Children.Clear();
+
+        foreach (var group in drivers.GroupBy(d => d.Category).OrderBy(g => g.Key))
+        {
+            // Category header
+            var header = new TextBlock
+            {
+                Text       = group.Key,
+                FontSize   = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush"),
+                Margin     = new Thickness(0, 20, 0, 8)
+            };
+            DriversCategoryStack.Children.Add(header);
+
+            foreach (var driver in group)
+            {
+                var card = BuildDriverCard(driver);
+                DriversCategoryStack.Children.Add(card);
+            }
+        }
+    }
+
+    private UIElement BuildDriverCard(DriverInfo driver)
+    {
+        var (statusColor, statusText, statusEmoji) = driver.Status switch
+        {
+            DriverStatus.Recent           => ("#10B981", "Recent",        "✅"),
+            DriverStatus.CheckRecommended => ("#F59E0B", "Check",         "🟡"),
+            DriverStatus.Outdated         => ("#EF4444", "Outdated",      "⚠️"),
+            DriverStatus.VeryOld          => ("#DC2626", "Very Old",      "🔴"),
+            _                                           => ("#6B7280", "Unknown",       "❓"),
+        };
+
+        var border = new Border
+        {
+            Background      = (System.Windows.Media.Brush)FindResource("BgSurfaceBrush"),
+            BorderBrush     = (System.Windows.Media.Brush)FindResource("BorderSubtleBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius    = new CornerRadius(10),
+            Padding         = new Thickness(16, 14, 16, 14),
+            Margin          = new Thickness(0, 0, 0, 6)
+        };
+
+        var outerGrid = new Grid();
+        outerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        outerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        // Left: name + metadata
+        var leftStack = new StackPanel();
+
+        var nameRow = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+
+        var statusBadge = new Border
+        {
+            Background   = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(statusColor + "33")),
+            BorderBrush  = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(statusColor)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding      = new Thickness(6, 2, 6, 2),
+            Margin       = new Thickness(0, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var statusLabel = new TextBlock
+        {
+            Text       = $"{statusEmoji} {statusText}",
+            FontSize   = 11,
+            Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(statusColor)),
+            Background = System.Windows.Media.Brushes.Transparent
+        };
+        statusBadge.Child = statusLabel;
+        nameRow.Children.Add(statusBadge);
+
+        nameRow.Children.Add(new TextBlock
+        {
+            Text       = driver.DeviceName,
+            FontSize   = 13,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryBrush"),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        leftStack.Children.Add(nameRow);
+
+        var meta = new TextBlock
+        {
+            FontSize   = 11,
+            Foreground = (System.Windows.Media.Brush)FindResource("TextMutedBrush"),
+            Text       = $"v{driver.Version}  ·  {(driver.DriverDate.HasValue ? driver.DriverDate.Value.ToString("d MMM yyyy") : "Date unknown")}  ·  {DriverService.FormatAge(driver.DriverDate)}" +
+                         (string.IsNullOrEmpty(driver.Manufacturer) ? "" : $"  ·  {driver.Manufacturer}")
+        };
+        leftStack.Children.Add(meta);
+
+        Grid.SetColumn(leftStack, 0);
+        outerGrid.Children.Add(leftStack);
+
+        // Right: manufacturer link button
+        if (driver.ManufacturerUrl is not null)
+        {
+            var linkBtn = new Button
+            {
+                Content             = "↗",
+                FontSize            = 14,
+                ToolTip             = "Open manufacturer driver page",
+                Background          = System.Windows.Media.Brushes.Transparent,
+                BorderThickness     = new Thickness(0),
+                Foreground          = new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#3B82F6")),
+                Cursor              = System.Windows.Input.Cursors.Hand,
+                VerticalAlignment   = VerticalAlignment.Center,
+                Padding             = new Thickness(8, 0, 0, 0),
+                Tag                 = driver.ManufacturerUrl
+            };
+            linkBtn.Click += (_, _) =>
+            {
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    { FileName = (string)linkBtn.Tag, UseShellExecute = true }); }
+                catch { }
+            };
+            Grid.SetColumn(linkBtn, 1);
+            outerGrid.Children.Add(linkBtn);
+        }
+
+        border.Child = outerGrid;
+        return border;
+    }
+
+    private void DriverWindowsUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName        = "ms-settings:windowsupdate-optionalupdates",
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            // Fallback: open Windows Update settings
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName        = "ms-settings:windowsupdate",
+                UseShellExecute = true
+            });
+        }
+    }
 }
+

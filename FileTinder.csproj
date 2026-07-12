@@ -28,7 +28,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Resource Include="app.ico"/>
+    <Resource Include="app.ico" />
   </ItemGroup>
 
   <ItemGroup>
@@ -43,6 +43,10 @@
     <Reference Include="MediaDevices">
       <HintPath>lib\MediaDevices.dll</HintPath>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="9.0.0" />
   </ItemGroup>
 
 </Project>

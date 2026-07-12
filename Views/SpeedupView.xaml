@@ -83,6 +83,7 @@
             <StackPanel Orientation="Horizontal" Margin="40,0,0,0">
                 <Button x:Name="TabEasyBtn"    Content="Easy Speedup"  Style="{StaticResource SpeedupTabBtnActive}" Click="Tab_Click" Tag="Easy"/>
                 <Button x:Name="TabBootBtn"    Content="My Boot Time"  Style="{StaticResource SpeedupTabBtn}"       Click="Tab_Click" Tag="Boot"/>
+                <Button x:Name="TabDriversBtn" Content="Drivers"       Style="{StaticResource SpeedupTabBtn}"       Click="Tab_Click" Tag="Drivers"/>
                 <Button x:Name="TabManualBtn"  Content="Manual"        Style="{StaticResource SpeedupTabBtn}"       Click="Tab_Click" Tag="Manual"/>
                 <Button x:Name="TabHistoryBtn" Content="History"       Style="{StaticResource SpeedupTabBtn}"       Click="Tab_Click" Tag="History"/>
             </StackPanel>
@@ -290,6 +291,82 @@
         </ScrollViewer>
 
         <!-- ===== MANUAL PANEL ===== -->
+        <!-- ===== DRIVERS PANEL ===== -->
+        <Grid x:Name="DriversPanel" Grid.Row="1" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Idle / Scan prompt -->
+            <StackPanel x:Name="DriversIdle" Grid.RowSpan="2" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,60,0,60">
+                <Border Width="150" Height="150" CornerRadius="75" HorizontalAlignment="Center" Margin="0,0,0,32">
+                    <Border.Background>
+                        <RadialGradientBrush>
+                            <GradientStop Color="#0D1F35" Offset="0"/>
+                            <GradientStop Color="#06111F" Offset="1"/>
+                        </RadialGradientBrush>
+                    </Border.Background>
+                    <TextBlock Text="🔧" FontSize="54" FontFamily="Segoe UI Emoji" HorizontalAlignment="Center" VerticalAlignment="Center" Background="Transparent"/>
+                </Border>
+                <TextBlock Text="Driver Health" FontSize="28" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                <TextBlock Text="Check your device drivers for outdated versions" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,36"/>
+                <Button Style="{StaticResource SpeedupPrimaryBtn}" HorizontalAlignment="Center" Click="DriverScan_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🔍 " FontFamily="Segoe UI Emoji" FontSize="15" Background="Transparent"/>
+                        <TextBlock Text="Scan drivers" FontSize="15" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <!-- Scanning spinner -->
+            <StackPanel x:Name="DriversScanning" Grid.RowSpan="2" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,80,0,80">
+                <TextBlock Text="🔍 Scanning installed drivers..." FontSize="16" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                <ProgressBar IsIndeterminate="True" Width="300" Height="4" Foreground="#3B82F6" Background="{StaticResource BgSurfaceBrush}"/>
+            </StackPanel>
+
+            <!-- Results -->
+            <Grid x:Name="DriversResults" Grid.RowSpan="2" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Summary bar -->
+                <Border Grid.Row="0" Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="40,20">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock x:Name="DriversSummaryText" FontSize="18" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
+                            <TextBlock x:Name="DriversSubText" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Style="{StaticResource BaseButtonStyle}" Margin="0,0,12,0" Click="DriverScan_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="↺ " FontFamily="Segoe UI Emoji" Background="Transparent"/>
+                                    <TextBlock Text="Rescan"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource SpeedupPrimaryBtn}" Padding="20,10" Click="DriverWindowsUpdate_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⬆ " FontFamily="Segoe UI Emoji" Background="Transparent"/>
+                                    <TextBlock Text="Update via Windows Update"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Driver list -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="DriversCategoryStack" Margin="40,24,40,40"/>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+
         <Grid x:Name="ManualPanel" Grid.Row="1" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
