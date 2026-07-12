@@ -13,7 +13,7 @@
     <!-- Version drives the IsNewer() check in UpdateService — must stay above latest GitHub release -->
     <Version>1.2.0</Version>
     <!-- Visible release label format: vyyyyMMdd.increment-for-the-day -->
-    <InformationalVersion>20260712.9</InformationalVersion>
+    <InformationalVersion>20260712.10</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
