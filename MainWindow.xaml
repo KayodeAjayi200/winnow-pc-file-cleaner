@@ -48,6 +48,28 @@
 
                 <!-- Sound + shortcuts controls -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <!-- Cleanup toggle button -->
+                    <Button x:Name="CleanupToggleButton"
+                            Cursor="Hand" Padding="10,5" Margin="0,0,10,0"
+                            ToolTip="PC Cleanup — free up disk space"
+                            AutomationProperties.Name="PC Cleanup"
+                            Click="CleanupToggleButton_Click">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsChecked, ElementName=CleanupToggleButton}" Value="True">
+                                        <Setter Property="Background" Value="#1A7C3AED"/>
+                                        <Setter Property="BorderBrush" Value="#7C3AED"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🧹" FontSize="14" Margin="0,0,6,0" FontFamily="Segoe UI Emoji"/>
+                            <TextBlock x:Name="CleanupButtonLabel" Text="Cleanup" FontSize="13"/>
+                        </StackPanel>
+                    </Button>
+
                     <!-- Shortcuts overlay button -->
                     <Button x:Name="ShortcutsButton"
                             Background="Transparent" BorderThickness="0"
@@ -505,8 +527,13 @@
             </Grid>
         </Border>
 
+        <!-- ════════════════  CLEANUP PANEL  ═══════════════════════ -->
+        <views:CleanupView x:Name="CleanupPanel"
+                           Grid.Row="6"
+                           Visibility="Collapsed"/>
+
         <!-- ════════════════  MAIN AREA  ════════════════════════════ -->
-        <Grid Grid.Row="6" Margin="24">
+        <Grid x:Name="MainAreaGrid" Grid.Row="6" Margin="24">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="280"/>

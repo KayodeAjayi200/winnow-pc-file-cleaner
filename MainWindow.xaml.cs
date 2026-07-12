@@ -49,6 +49,22 @@ public partial class MainWindow : Window
         };
     }
 
+    // ── Cleanup panel toggle ──────────────────────────────────────────────────
+
+    private bool _cleanupVisible = false;
+
+    private void CleanupToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        _cleanupVisible = !_cleanupVisible;
+
+        CleanupPanel.Visibility  = _cleanupVisible ? Visibility.Visible  : Visibility.Collapsed;
+        MainAreaGrid.Visibility  = _cleanupVisible ? Visibility.Collapsed : Visibility.Visible;
+        CleanupButtonLabel.Text  = _cleanupVisible ? "← Back" : "Cleanup";
+
+        // Hide filter/folder bars when in cleanup mode to keep UI clean
+        // (rows 2-5 remain visible so user context is preserved)
+    }
+
     private void TypeFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_vm == null) return;
